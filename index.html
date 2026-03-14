@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title id="page-title">考察行程系統</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <style>
+        :root { 
+            --primary: #007AFF; --bg: #F2F2F7; --card: #FFFFFF; 
+            --text: #1C1C1E; --secondary: #8E8E93; --tint: rgba(0, 122, 255, 0.1); --red: #FF3B30; --border: #E5E5EA; --green: #34C759;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; transition: background 0.3s, color 0.3s; }
+
+        /* 地圖與數字標記 */
+        #map-area { position: absolute; top: 0; left: 0; width: 100%; height: 48%; z-index: 1; }
+        #map { width: 100%; height: 100%; }
+        .map-marker-num { background-color: var(--primary); color: #FFF; border-radius: 12px; padding: 0 6px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 2px solid #FFF; box-shadow: 0 2px 5px rgba(0,0,0,0.5); white-space: nowrap; }
+        .leaflet-control-layers { border-radius: 12px !important; border: 1px solid var(--border) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }
+
+        /* 抽屜介面 */
+        .content { 
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;
+            background: var(--card); opacity: 0.95; backdrop-filter: blur(25px) saturate(180%);
+            border-top-left-radius: 24px; border-top-right-radius: 24px;
+            z-index: 10; display: flex; flex-direction: column;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.3); transition: height 0.3s;
+        }
+        .drawer-handle { width: 40px; height: 5px; background: var(--secondary); border-radius: 10px; margin: 10px auto; cursor: pointer; opacity: 0.5; }
+
+        /* 導覽列 */
+        .nav-header { padding: 0 16px 8px; display: flex; flex-direction: column; }
+        .trip-title-display { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 10px; color: var(--text); }
+        .day-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+        .day-bar::-webkit-scrollbar { display: none; }
+        .day-pill { min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+        .day-pill.active { background: var(--primary); color: #FFF; border-color: var(--primary); }
+
+        .tab-group { display: flex; background: var(--bg); padding: 3px; border-radius: 12px; margin: 0 16px 10px; border: 1px solid var(--border); }
+        .tab-item { flex: 1; border: none; height: 44px; border-radius: 9px; font-weight: 600; font-size: 13px; background: transparent; color: var(--secondary); cursor: pointer; }
+        .tab-item.active { background: var(--card); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+        .scroll-area { flex: 1; overflow-y: auto; padding: 0 16px 100px; }
+
+        /* 登機證與卡片 */
+        .boarding-pass { display: flex; background: var(--card); border-radius: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; overflow: hidden; cursor: pointer; color: var(--text); transition: opacity 0.3s; }
+        .boarding-pass::before, .boarding-pass::after { content: ''; position: absolute; top: 50%; width: 24px; height: 24px; background: var(--bg); border-radius: 50%; transform: translateY(-50%); z-index: 2; border: 1px solid var(--border); }
+        .boarding-pass::before { left: -13px; border-right-color: transparent; }
+        .boarding-pass::after { right: -13px; border-left-color: transparent; }
+        .bp-main { flex: 7; padding: 16px; border-right: 2px dashed var(--border); }
+        .bp-stub { flex: 3; padding: 16px; background: var(--tint); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+        .card { background: var(--card); border-radius: 18px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; transition: opacity 0.3s; cursor: pointer; }
+        .completed { opacity: 0.5; filter: grayscale(60%); }
+        .spot-thumb { width: 75px; height: 75px; border-radius: 12px; object-fit: cover; background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--primary); font-weight: bold; overflow: hidden; }
+        .spot-info { flex: 1; min-width: 0; color: var(--text); }
+        .spot-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .spot-memo { font-size: 12px; color: var(--secondary); line-height: 1.4; margin: 6px 0 2px 0; }
+        
+        /* 標籤與 Map 按鈕設計 */
+        .cat-tag { font-size: 10px; color: var(--primary); background: var(--tint); padding: 3px 6px; border-radius: 6px; font-weight: bold; }
+        .btn-map { font-size: 10px; font-weight: bold; color: var(--primary); background: var(--tint); padding: 3px 8px; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: opacity 0.2s; border: 1px solid var(--tint); }
+        .btn-map:active { opacity: 0.6; }
+        
+        .cost-row { display: flex; gap: 8px; font-size: 13px; font-weight: 700; margin-top: 4px; align-items: center; }
+
+        /* 內聯編輯與表單 */
+        .inline-edit-box { display: flex; flex-direction: column; gap: 10px; background: var(--bg); padding: 12px; border-radius: 12px; width: 100%; border: 1px solid var(--border); cursor: default; margin-bottom: 12px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        .input-label { font-size: 12px; font-weight: 600; color: var(--secondary); margin-bottom: 2px; margin-top: 4px; display: block; }
+        .ios-input { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 14px; background: var(--card); color: var(--text); }
+        
+        .btn-action { min-height: 44px; border-radius: 10px; border: none; background: var(--bg); color: var(--primary); font-weight: 600; padding: 0 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: 1; }
+        .btn-save { background: var(--primary); color: #FFF; width: 100%; margin-top: 4px; }
+        .btn-complete { background: var(--green); color: #FFF; }
+        .btn-incomplete { background: var(--secondary); color: #FFF; }
+
+        /* 總覽與圖表 */
+        .overview-panel { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 15px; border: 1px solid var(--border); color: var(--text); }
+        .chart-flex-container { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+        .chart-canvas-wrapper { width: 220px; height: 220px; flex-shrink: 0; margin: 0 auto; position: relative; }
+        .chart-summary-list { flex: 1; min-width: 200px; font-size: 12px; color: var(--secondary); }
+        .chart-summary-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+        .chart-summary-item b { color: var(--text); }
+        .bar-container { position: relative; height: 200px; width: 100%; margin-top: 10px; }
+
+        /* 花費彙整表 */
+        .expense-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+        .expense-table th { padding: 8px; border-bottom: 2px solid var(--border); color: var(--primary); }
+        .expense-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+        .expense-day-row { background: var(--tint); color: var(--primary); font-weight: bold; }
+
+        /* 懸浮按鈕 */
+        .fab-btn { display: none; position: fixed; bottom: 30px; right: 20px; width: 56px; height: 56px; border-radius: 28px; background: var(--primary); color: white; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 100; cursor: pointer; justify-content: center; align-items: center; transition: background 0.3s; }
+        #fab-edit { bottom: 100px; }
+
+        /* 模態彈窗 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; backdrop-filter: blur(5px); padding: 20px; }
+        .modal-content { background: var(--card); color: var(--text); width: 100%; max-width: 400px; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); }
+        .day-mgt-row { display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px; border-radius: 8px; margin-bottom: 8px;}
+
+        /* PDF 列印保護 */
+        @media print { 
+            @page { size: A4 portrait; margin: 15mm; }
+            .no-print, .fab-btn, .leaflet-control-container { display: none !important; } 
+            .content { position: static !important; height: auto !important; display: block !important; background: white !important; box-shadow: none !important; border-radius: 0 !important; }
+            .scroll-area { overflow: visible !important; height: auto !important; padding: 0 !important; }
+            body { overflow: visible !important; height: auto !important; background: white !important; color: black !important; }
+            
+            .chart-print-panel { height: 42vh !important; page-break-inside: avoid; border: 1px solid #CCC !important; box-shadow: none !important; margin-bottom: 20px !important; color: black !important; background: white !important; display: flex !important; flex-direction: column !important; justify-content: center !important;}
+            .overview-panel, .card, .boarding-pass { break-inside: avoid; border: 1px solid #CCC !important; box-shadow: none !important; margin-bottom: 10px !important; color: black !important; background: white !important; }
+            
+            .chart-flex-container { display: flex !important; flex-direction: row !important; align-items: center !important; }
+            .chart-canvas-wrapper { width: 250px !important; height: 250px !important; margin-right: 20px !important; flex-shrink: 0 !important;}
+            canvas { width: 250px !important; height: 250px !important; max-width: 250px !important; max-height: 250px !important; }
+            
+            .bar-container { width: 100% !important; height: 200px !important; page-break-inside: avoid; }
+            .bar-container canvas { width: 100% !important; height: 200px !important; max-height: 200px !important; }
+            
+            .page-break { page-break-after: always; }
+            * { color: black !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="map-area" class="no-print"><div id="map"></div></div>
+
+<div class="content" id="main-drawer">
+    <div class="drawer-handle no-print" onclick="toggleExpand()"></div>
+    <div class="nav-header no-print">
+        <div class="trip-title-display" id="display-trip-title">System</div>
+        <div class="day-bar" id="day-bar"></div>
+    </div>
+    
+    <div class="tab-group no-print">
+        <button class="tab-item active" id="tab-itinerary" onclick="switchTab('itinerary')">Itinerary</button>
+        <button class="tab-item" id="tab-overview" onclick="switchTab('overview')">Overview</button>
+    </div>
+
+    <div class="scroll-area" id="view-port"></div>
+</div>
+
+<button class="fab-btn" id="fab-settings" onclick="openSettings()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+</button>
+
+<button class="fab-btn" id="fab-edit" onclick="toggleEditMode()">
+    <svg id="icon-pencil" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+    <svg id="icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+</button>
+
+<div class="modal-overlay" id="settings-modal">
+    <div class="modal-content">
+        <h3 id="lbl-settings-title" style="margin-top:0; border-bottom: 2px solid var(--border); padding-bottom: 10px;">Settings</h3>
+        
+        <div class="input-row" style="margin-bottom:10px;">
+            <div style="flex:1;">
+                <div class="input-label" id="lbl-lang">Language</div>
+                <select id="cfg-lang" class="ios-input" onchange="applyTranslation(true)">
+                    <option value="zh-TW">繁體中文</option><option value="en">English</option>
+                </select>
+            </div>
+            <div style="flex:1;">
+                <div class="input-label" id="lbl-base-theme">Base Theme</div>
+                <select id="cfg-base-theme" class="ios-input" onchange="applyTheme(true)">
+                    <option value="light">Light</option><option value="dark">Dark</option>
+                </select>
+            </div>
+        </div>
+        <div class="input-label" id="lbl-accent">Accent Color</div>
+        <select id="cfg-accent" class="ios-input" onchange="applyTheme(true)" style="margin-bottom:10px;">
+            <option value="blue">Blue</option><option value="orange">Orange</option>
+            <option value="mono">Mono</option><option value="gray">Gray</option>
+        </select>
+
+        <div class="input-label" id="lbl-trip-name">Trip Name</div>
+        <input id="cfg-title" class="ios-input">
+        
+        <div class="input-label" id="lbl-start-date">Start Date</div>
+        <input id="cfg-date" type="date" class="ios-input">
+        
+        <div class="input-row">
+            <div style="flex:1;"><div class="input-label" id="lbl-base-curr">Base Curr</div><input id="cfg-base" class="ios-input"></div>
+            <div style="flex:1;"><div class="input-label" id="lbl-target-curr">Target Curr</div><input id="cfg-target" class="ios-input"></div>
+        </div>
+        
+        <div class="input-label" id="lbl-rate">Rate</div>
+        <input id="cfg-rate" type="number" step="0.001" class="ios-input">
+        
+        <h4 id="lbl-day-mgt" style="margin: 15px 0 5px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">Days Management</h4>
+        <div id="settings-days-list" style="margin-bottom: 10px;"></div>
+        <button class="btn-action" id="btn-add-day" style="border: 1px dashed var(--primary); background: transparent;" onclick="addDayInSettings()">Add Day</button>
+
+        <button class="btn-action btn-save" id="btn-save-settings" style="margin-top: 20px;" onclick="saveSettings()">Save</button>
+        <button class="btn-action" id="btn-cancel-settings" style="background:var(--bg); color:var(--text);" onclick="closeSettings()">Cancel</button>
+    </div>
+</div>
+
+<script>
+    if (typeof window !== 'undefined') {
+        window.getDayDate = function(dayNum) {
+            if(!config || !config.startDate) return "YYYY-MM-DD";
+            let d = new Date(config.startDate); 
+            d.setDate(d.getDate() + (dayNum - 1));
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        };
+    }
+    if (typeof ChartDataLabels !== 'undefined') { Chart.register(ChartDataLabels); }
+
+    const i18n = {
+        'zh-TW': {
+            'itinerary': '日行程', 'overview': '總覽', 'quickExpense': '快速記帳', 'addSpot': '新增行程',
+            'save': '儲存', 'delete': '刪除', 'cancel': '取消', 'nav': '導航', 'edit': '編輯', 'mapBtn': 'Map',
+            'expenseTitle': '消費預算分析', 'catTitle': '行程分類數量', 'stepTitle': '每日步數紀錄', 'completionTitle': '行程完成率',
+            'exportPDF': '匯出 PDF', 'totalCost': '預估總支出', 'expenseTable': '花費支出彙整表', 'addFlight': '新增航班', 'tripSummary': '行程概述',
+            'settingsTitle': '系統參數設定', 'lang': '介面語言', 'baseTheme': '主色主題', 'accent': '強調副色', 
+            'light': '亮色 (Light)', 'dark': '暗色 (Dark)', 'blue': '藍色 (Blue)', 'orange': '橘色 (Orange)', 'mono': '黑白 (Mono)', 'gray': '灰色 (Gray)',
+            'tripName': '行程名稱', 'startDate': '出發日期', 'baseCurr': '基礎幣種', 'targetCurr': '目標幣種', 
+            'rate': '匯率', 'dayMgt': '天數與步數管理', 'addDay': '新增一天', 'saveSettings': '儲存設定',
+            'markComplete': '標記完成', 'markIncomplete': '取消完成', 'completed': '已完成', 'incomplete': '未完成',
+            'item': '項目', 'category': '分類', 'baseCost': '原幣花費', 'targetCost': '換算花費', 'day': '第', 'dayUnit': '天',
+            'time': '時間', 'name': '名稱', 'lat': '緯度', 'lng': '經度', 'memo': '簡介備註...', 'imgUrl': '圖片網址', 'expNote': '花費說明', 'amount': '金額',
+            'flightAndNo': '航空與航班號', 'locLatLng': '機場座標 (緯度/經度)', 'routeTime': '起降與時間', 'seatCost': '座位與費用',
+            'cats': ["美食", "鐵路", "博物館", "美術館", "科學館", "航太館", "自然景點", "交通點", "觀光名勝", "古蹟", "住宿", "航班", "其他"]
+        },
+        'en': {
+            'itinerary': 'Itinerary', 'overview': 'Overview', 'quickExpense': 'Quick Expense', 'addSpot': 'Add Spot',
+            'save': 'Save', 'delete': 'Delete', 'cancel': 'Cancel', 'nav': 'Nav', 'edit': 'Edit', 'mapBtn': 'Map',
+            'expenseTitle': 'Expense Analysis', 'catTitle': 'Category Count', 'stepTitle': 'Daily Steps', 'completionTitle': 'Completion Rate',
+            'exportPDF': 'Export PDF', 'totalCost': 'Est. Total Cost', 'expenseTable': 'Expense Summary', 'addFlight': 'Add Flight', 'tripSummary': 'Trip Summary',
+            'settingsTitle': 'System Settings', 'lang': 'Language', 'baseTheme': 'Base Theme', 'accent': 'Accent Color',
+            'light': 'Light', 'dark': 'Dark', 'blue': 'Blue', 'orange': 'Orange', 'mono': 'Mono', 'gray': 'Gray',
+            'tripName': 'Trip Name', 'startDate': 'Start Date', 'baseCurr': 'Base Curr', 'targetCurr': 'Target Curr', 
+            'rate': 'Rate', 'dayMgt': 'Days & Steps', 'addDay': 'Add Day', 'saveSettings': 'Save Settings',
+            'markComplete': 'Complete', 'markIncomplete': 'Undo', 'completed': 'Completed', 'incomplete': 'Pending',
+            'item': 'Item', 'category': 'Category', 'baseCost': 'Base Cost', 'targetCost': 'Converted', 'day': 'Day ', 'dayUnit': '',
+            'time': 'Time', 'name': 'Name', 'lat': 'Lat', 'lng': 'Lng', 'memo': 'Memo...', 'imgUrl': 'Image URL', 'expNote': 'Expense Note', 'amount': 'Amount',
+            'flightAndNo': 'Airline & Flight No', 'locLatLng': 'Location (Lat/Lng)', 'routeTime': 'Route & Time', 'seatCost': 'Seat & Cost',
+            'cats': ["Food", "Railway", "Museum", "Art Gallery", "Science", "Aerospace", "Nature", "Transit", "Attraction", "Historic", "Hotel", "Flight", "Others"]
+        }
+    };
+
+    function safeParse(key, fallback) {
+        try { let val = localStorage.getItem(key); return val ? JSON.parse(val) : fallback; } 
+        catch(e) { return fallback; }
+    }
+
+    let defaultConfig = { title: "2026 日本航太考察", baseCurr: "JPY", targetCurr: "TWD", rate: 0.21, startDate: "2026-03-25", lang: "zh-TW", baseTheme: "light", accent: "blue" };
+    let config = safeParse('v83_config', defaultConfig);
+    if(!config.lang) config.lang = 'zh-TW'; if(!config.baseTheme) config.baseTheme = 'light'; if(!config.accent) config.accent = 'blue';
+
+    let extras = safeParse('v83_extras', []);
+    let editTarget = null; let expenseChart = null; let categoryChart = null; let stepsChart = null; let completionChart = null;
+    let tempItinerary = [];
+    let curIdx = 0, currentTab = 'itinerary', map, pathLine, isExpanded = false, isEditMode = false;
+    let mapMarkers = [];
+
+    function t(key) { return i18n[config.lang][key] || key; }
+
+    function applyTheme(fromUI = false) {
+        if(fromUI) { config.baseTheme = document.getElementById('cfg-base-theme').value; config.accent = document.getElementById('cfg-accent').value; }
+        const root = document.documentElement;
+        if (config.baseTheme === 'dark') {
+            root.style.setProperty('--bg', '#121212'); root.style.setProperty('--card', '#1C1C1E');
+            root.style.setProperty('--text', '#FFFFFF'); root.style.setProperty('--secondary', '#A0A0A5'); root.style.setProperty('--border', '#333333');
+        } else {
+            root.style.setProperty('--bg', '#F2F2F7'); root.style.setProperty('--card', '#FFFFFF');
+            root.style.setProperty('--text', '#1C1C1E'); root.style.setProperty('--secondary', '#8E8E93'); root.style.setProperty('--border', '#E5E5EA');
+        }
+        let pColor, pTint;
+        if (config.accent === 'orange') { pColor = '#FF9500'; pTint = 'rgba(255,149,0,0.15)'; }
+        else if (config.accent === 'mono') { pColor = config.baseTheme==='dark'?'#E5E5EA':'#333333'; pTint = config.baseTheme==='dark'?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.05)'; }
+        else if (config.accent === 'gray') { pColor = '#8E8E93'; pTint = 'rgba(142,142,147,0.15)'; }
+        else { pColor = '#007AFF'; pTint = 'rgba(0,122,255,0.1)'; } 
+        root.style.setProperty('--primary', pColor); root.style.setProperty('--tint', pTint);
+    }
+
+    function updateStaticText() {
+        document.getElementById('page-title').innerText = config.title; document.getElementById('display-trip-title').innerText = config.title;
+        document.getElementById('tab-itinerary').innerText = t('itinerary'); document.getElementById('tab-overview').innerText = t('overview');
+        document.getElementById('lbl-settings-title').innerText = t('settingsTitle'); document.getElementById('lbl-lang').innerText = t('lang');
+        document.getElementById('lbl-base-theme').innerText = t('baseTheme'); document.getElementById('lbl-accent').innerText = t('accent');
+        document.getElementById('lbl-trip-name').innerText = t('tripName'); document.getElementById('lbl-start-date').innerText = t('startDate');
+        document.getElementById('lbl-base-curr').innerText = t('baseCurr'); document.getElementById('lbl-target-curr').innerText = t('targetCurr');
+        document.getElementById('lbl-rate').innerText = t('rate'); document.getElementById('lbl-day-mgt').innerText = t('dayMgt');
+        document.getElementById('btn-add-day').innerText = t('addDay'); document.getElementById('btn-save-settings').innerText = t('saveSettings');
+        document.getElementById('btn-cancel-settings').innerText = t('cancel');
+
+        let themeOpts = document.getElementById('cfg-base-theme').options; themeOpts[0].text = t('light'); themeOpts[1].text = t('dark');
+        let accOpts = document.getElementById('cfg-accent').options; accOpts[0].text = t('blue'); accOpts[1].text = t('orange'); accOpts[2].text = t('mono'); accOpts[3].text = t('gray');
+    }
+
+    function applyTranslation(fromUI = false) {
+        if (fromUI) config.lang = document.getElementById('cfg-lang').value;
+        updateStaticText();
+        if (fromUI) render(); 
+    }
+
+    function toggleEditMode() {
+        isEditMode = !isEditMode; editTarget = null; 
+        const fab = document.getElementById('fab-edit');
+        if (isEditMode) { fab.style.backgroundColor = 'var(--red)'; document.getElementById('icon-pencil').style.display = 'none'; document.getElementById('icon-close').style.display = 'block'; } 
+        else { fab.style.backgroundColor = 'var(--primary)'; document.getElementById('icon-pencil').style.display = 'block'; document.getElementById('icon-close').style.display = 'none'; }
+        renderView();
+    }
+
+    // --- 資料載入 ---
+    const initialData = [
+        { day: 1, summary: "科學啟航", steps: 0, flight: { airline: "EVA AIR", flightNo: "BR198", from: "TPE", to: "NGO", time: "08:50", seat: "22K", cost: 15000, lat: 34.8584, lng: 136.8054, completed: false }, spots: [
+            { id: 1, time: "11:00", name: "名古屋市科學館", cat: "科學館", cost: 800, lat: 35.1652, lng: 136.8997, memo: "天文館直徑35m", img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150", completed: false },
+            { id: 2, time: "15:00", name: "名古屋市美術館", cat: "美術館", cost: 500, lat: 35.1643, lng: 136.9015, memo: "現代藝術", img: "https://placehold.co/150?text=Art", completed: false },
+            { id: 3, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "車站周邊", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 2, summary: "工業科技日", steps: 0, flight: null, spots: [
+            { id: 4, time: "09:30", name: "豐田產業技術紀念館", cat: "博物館", cost: 500, lat: 35.1802, lng: 136.8767, memo: "工業革命", img: "https://images.unsplash.com/photo-1533106497176-45ae19e68ba2?w=150", completed: false },
+            { id: 5, time: "13:30", name: "磁浮鐵道館", cat: "鐵路", cost: 1000, lat: 35.0506, lng: 136.8509, memo: "L0系實體車", img: "https://images.unsplash.com/photo-1532105956626-9569c03602f6?w=150", completed: false },
+            { id: 6, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 3, summary: "航太核心", steps: 0, flight: null, spots: [
+            { id: 7, time: "09:30", name: "愛知飛行博物館", cat: "航太館", cost: 1000, lat: 35.2458, lng: 136.9242, memo: "MRJ研發歷程", img: "https://placehold.co/150?text=MRJ", completed: false },
+            { id: 8, time: "13:30", name: "岐阜航空宇宙博物館", cat: "航太館", cost: 800, lat: 35.3853, lng: 136.8533, memo: "H-II火箭引擎", img: "https://placehold.co/150?text=Aero", completed: false },
+            { id: 9, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 4, summary: "自衛隊與樂器", steps: 0, flight: null, spots: [
+            { id: 10, time: "09:00", name: "東海道新幹線前往濱松", cat: "鐵路", cost: 4500, lat: 34.7037, lng: 137.7347, memo: "移動日", img: "https://placehold.co/150?text=Transit", completed: false },
+            { id: 11, time: "10:00", name: "航空自衛隊廣報館", cat: "航太館", cost: 0, lat: 34.7431, lng: 137.6976, memo: "F-2 戰機", img: "https://placehold.co/150?text=JASDF", completed: false },
+            { id: 12, time: "14:00", name: "濱松樂器博物館", cat: "博物館", cost: 800, lat: 34.7061, lng: 137.7345, memo: "世界級樂器館", img: "https://placehold.co/150?text=Music", completed: false },
+            { id: 13, time: "18:00", name: "濱松住宿", cat: "住宿", cost: 10000, lat: 34.7037, lng: 137.7347, memo: "車站周圍", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 5, summary: "松本藝術", steps: 0, flight: null, spots: [
+            { id: 14, time: "09:00", name: "JR前往松本", cat: "鐵路", cost: 5500, lat: 36.2331, lng: 137.9717, memo: "山區移動", img: "https://placehold.co/150?text=Transit", completed: false },
+            { id: 15, time: "11:00", name: "松本市美術館", cat: "美術館", cost: 410, lat: 36.2312, lng: 137.9786, memo: "草間彌生", img: "https://placehold.co/150?text=Kusama", completed: false },
+            { id: 16, time: "15:00", name: "松本市天文館", cat: "科學館", cost: 300, lat: 36.2577, lng: 137.9861, memo: "地方觀測", img: "https://placehold.co/150?text=Astro", completed: false },
+            { id: 17, time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 6, summary: "長野視覺傳達", steps: 0, flight: null, spots: [
+            { id: 18, time: "10:00", name: "長野縣立美術館", cat: "美術館", cost: 700, lat: 36.6625, lng: 138.1885, memo: "極簡建築", img: "https://placehold.co/150?text=Nagano", completed: false },
+            { id: 19, time: "14:00", name: "日本浮世繪博物館", cat: "博物館", cost: 1000, lat: 36.2335, lng: 137.9405, memo: "最大私人收藏", img: "https://placehold.co/150?text=Ukiyo", completed: false },
+            { id: 20, time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        ]},
+        { day: 7, summary: "工藝收尾", steps: 0, flight: { airline: "EVA AIR", flightNo: "BR197", from: "NGO", to: "TPE", time: "16:30", seat: "25A", cost: 0, lat: 34.8584, lng: 136.8054, completed: false }, spots: [
+            { id: 21, time: "08:00", name: "JR特急信濃回名古屋", cat: "鐵路", cost: 3000, lat: 35.17, lng: 136.88, memo: "返程", img: "https://placehold.co/150?text=Transit", completed: false },
+            { id: 22, time: "10:00", name: "德川美術館", cat: "博物館", cost: 1400, lat: 35.1838, lng: 136.9332, memo: "江戶器物", img: "https://placehold.co/150?text=Tokugawa", completed: false }
+        ]}
+    ];
+
+    let itinerary = safeParse('v83_data', initialData);
+    if (!Array.isArray(itinerary) || itinerary.length === 0) { itinerary = JSON.parse(JSON.stringify(initialData)); }
+    itinerary.forEach(d => { if(!d.spots) d.spots = []; if(typeof d.steps !== 'number') d.steps = 0; });
+
+    window.onload = () => {
+        document.getElementById('cfg-lang').value = config.lang; document.getElementById('cfg-base-theme').value = config.baseTheme; document.getElementById('cfg-accent').value = config.accent;
+        applyTheme(); updateStaticText(); initMap();
+    };
+
+    // --- 3. 地圖處理 ---
+    function initMap() {
+        map = L.map('map', { zoomControl: false }).setView([35.1652, 136.8997], 10);
+        const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 });
+        const googleSat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20 });
+        const osmNormal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+        const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
+
+        const baseMaps = { "Satellite+Labels": googleHybrid, "Satellite": googleSat, "Normal": osmNormal, "Light": cartoLight };
+        googleHybrid.addTo(map); 
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+        pathLine = L.polyline([], { color: 'var(--primary)', weight: 4, opacity: 0.8, dashArray: '10, 10' }).addTo(map);
+        render();
+    }
+
+    function focusSpot(la, ln) {
+        let nLat = parseFloat(la); let nLng = parseFloat(ln);
+        if(isNaN(nLat) || isNaN(nLng) || (nLat === 0 && nLng === 0)) return;
+        map.flyTo([nLat, nLng], 15, { animate: true, duration: 0.5 });
+        if(isExpanded) toggleExpand();
+    }
+
+    function updateMapPath() {
+        mapMarkers.forEach(m => map.removeLayer(m)); mapMarkers = [];
+        let pts = [];
+
+        try {
+            if (currentTab === 'overview') {
+                itinerary.forEach(d => {
+                    let spotIdx = 1;
+                    if (d.flight && d.flight.lat) pts.push({ lat: parseFloat(d.flight.lat), lng: parseFloat(d.flight.lng), title: d.flight.from, index: `D${d.day}-F` });
+                    let sorted = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
+                    sorted.forEach((s) => {
+                        let sLat = parseFloat(s.lat); let sLng = parseFloat(s.lng);
+                        if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: s.name, index: `D${d.day}-${spotIdx}` }); spotIdx++; }
+                    });
+                });
+            } else {
+                if(!itinerary[curIdx]) return;
+                const d = itinerary[curIdx];
+                if (d.flight && d.flight.lat) pts.push({ lat: parseFloat(d.flight.lat), lng: parseFloat(d.flight.lng), title: d.flight.from, index: "F" });
+                let sorted = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
+                sorted.forEach((s, index) => {
+                    let sLat = parseFloat(s.lat); let sLng = parseFloat(s.lng);
+                    if(!isNaN(sLat) && sLat !== 0) pts.push({ lat: sLat, lng: sLng, title: s.name, index: index + 1 });
+                });
+            }
+
+            const latlngs = pts.map(p => [p.lat, p.lng]);
+            pathLine.setLatLngs(latlngs);
+            
+            pts.forEach(p => {
+                let iconHtml = `<div class="map-marker-num">${p.index}</div>`;
+                const icon = L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [36, 24], iconAnchor: [18, 12] });
+                const m = L.marker([p.lat, p.lng], { icon: icon }).bindPopup(p.title).addTo(map);
+                mapMarkers.push(m);
+            });
+
+            if (latlngs.length > 1) map.fitBounds(pathLine.getBounds(), { padding: [40, 40] });
+            else if (latlngs.length === 1) map.setView(latlngs[0], 14);
+        } catch (e) { console.error("Map Error:", e); }
+    }
+
+    // --- 4. UI 渲染 ---
+    function render() {
+        document.getElementById('day-bar').innerHTML = itinerary.map((d, i) => `<button class="day-pill ${i===curIdx?'active':''}" onclick="curIdx=${i}; editTarget=null; render();">D${d.day}</button>`).join('');
+        updateMapPath(); renderView();
+        document.getElementById('fab-settings').style.display = (currentTab === 'overview') ? 'flex' : 'none';
+        document.getElementById('fab-edit').style.display = (currentTab === 'itinerary') ? 'flex' : 'none';
+    }
+
+    function toggleComplete(type, idx) {
+        if(type === 'flight') { itinerary[curIdx].flight.completed = !itinerary[curIdx].flight.completed; }
+        else { itinerary[curIdx].spots[idx].completed = !itinerary[curIdx].spots[idx].completed; }
+        save(); renderView();
+    }
+
+    function renderView() {
+        const port = document.getElementById('view-port');
+        try {
+            const d = itinerary[curIdx];
+            if(!d) return;
+            let currentDateStr = window.getDayDate(d.day);
+            const catOpts = i18n[config.lang]['cats'];
+            
+            if (currentTab === 'itinerary') {
+                let html = `<div style="margin-bottom:12px; font-weight:700; color:var(--primary); font-size:15px;">Day ${d.day} (${currentDateStr})：${d.summary}</div>`;
+                
+                if (isEditMode) {
+                    html += `
+                    <div class="card" style="flex-direction:column; background:var(--tint); border:1px solid var(--border); cursor:default;">
+                        <div style="font-weight:800; margin-bottom:8px; color:var(--primary);">${t('quickExpense')}</div>
+                        <div class="input-row" style="margin-bottom:8px;">
+                            <select id="ex-cat" class="ios-input" style="flex:1; padding:0 5px;">
+                                ${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}
+                            </select>
+                            <input id="ex-jpy" type="number" class="ios-input" placeholder="${config.baseCurr}" style="flex:2;">
+                        </div>
+                        <input id="ex-note" class="ios-input" placeholder="${t('expNote')}" style="margin-bottom:8px;">
+                        <button class="btn-action btn-save" style="margin-top:0;" onclick="addEx()">${t('save')}</button>
+                    </div>`;
+                }
+                
+                if (d.flight) {
+                    if (editTarget === 'flight' && isEditMode) {
+                        html += `
+                        <div class="inline-edit-box" style="margin-bottom:12px;">
+                            <div class="input-row"><input id="f-air" class="ios-input" value="${d.flight.airline}"><input id="f-no" class="ios-input" value="${d.flight.flightNo}"></div>
+                            <div class="input-row"><input id="f-lat" type="number" step="0.0001" class="ios-input" value="${d.flight.lat||''}"><input id="f-lng" type="number" step="0.0001" class="ios-input" value="${d.flight.lng||''}"></div>
+                            <div class="input-row"><input id="f-from" class="ios-input" value="${d.flight.from}"><input id="f-to" class="ios-input" value="${d.flight.to}"><input id="f-time" class="ios-input" value="${d.flight.time}"></div>
+                            <div class="input-row"><input id="f-seat" class="ios-input" value="${d.flight.seat}"><input id="f-cost" type="number" class="ios-input" value="${d.flight.cost}"></div>
+                            <button class="btn-action btn-save" onclick="saveFlight()">${t('save')}</button>
+                            <button class="btn-action btn-del" onclick="deleteFlight()">${t('delete')}</button>
+                        </div>`;
+                    } else {
+                        let isComp = d.flight.completed;
+                        let editBtnHtml = isEditMode ? `
+                            <button class="btn-action" style="margin-top:8px; height:28px; font-size:11px;" onclick="event.stopPropagation(); editTarget='flight'; renderView();">${t('edit')}</button>
+                            <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="margin-top:4px; height:28px; font-size:11px;" onclick="event.stopPropagation(); toggleComplete('flight')">${isComp ? t('markIncomplete') : t('markComplete')}</button>
+                        ` : '';
+
+                        html += `
+                        <div class="boarding-pass ${isComp?'completed':''}" onclick="focusSpot('${d.flight.lat}', '${d.flight.lng}')">
+                            <div class="bp-main">
+                                <div style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px;">${d.flight.airline}</div>
+                                <div class="bp-route"><div class="bp-code" style="font-size:22px;">${d.flight.from}</div><div style="flex:1; text-align:center; color:var(--primary);">FLIGHT</div><div class="bp-code" style="font-size:22px;">${d.flight.to}</div></div>
+                                <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
+                                    <div><b>${d.flight.flightNo}</b> | ${d.flight.time}</div>
+                                    <div style="color:var(--primary); font-weight:bold;">${d.flight.cost} ${config.targetCurr}</div>
+                                </div>
+                            </div>
+                            <div class="bp-stub">
+                                <span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${d.flight.seat}</div>
+                                ${editBtnHtml}
+                            </div>
+                        </div>`;
+                    }
+                } else if (isEditMode) {
+                    html += `<button class="btn-action" style="width:100%; border:1px dashed var(--border); margin-bottom:12px;" onclick="addFlightUI()">+ ${t('addFlight')}</button>`;
+                }
+
+                let sortedSpots = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
+                html += sortedSpots.map((s, sortIdx) => {
+                    let realIdx = d.spots.findIndex(os => os.id === s.id);
+                    let isComp = s.completed;
+                    
+                    if (editTarget === realIdx && isEditMode) {
+                        return `
+                        <div class="card" style="padding:0; border:none; box-shadow:none;">
+                            <div class="inline-edit-box" onclick="event.stopPropagation()">
+                                <div class="input-row"><input id="edit-time-${realIdx}" class="ios-input" value="${s.time}" style="width:80px;" placeholder="${t('time')}"><input id="edit-name-${realIdx}" class="ios-input" value="${s.name}" style="flex:1;" placeholder="${t('name')}"></div>
+                                <div class="input-row">
+                                    <select id="edit-cat-${realIdx}" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}" ${c===s.cat?'selected':''}>${c}</option>`).join('')}</select>
+                                    <input id="edit-cost-${realIdx}" type="number" class="ios-input" value="${s.cost}" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
+                                </div>
+                                <div class="input-row"><input id="edit-lat-${realIdx}" type="number" step="0.0001" class="ios-input" value="${s.lat}" placeholder="${t('lat')}"><input id="edit-lng-${realIdx}" type="number" step="0.0001" class="ios-input" value="${s.lng}" placeholder="${t('lng')}"></div>
+                                <input id="edit-img-${realIdx}" class="ios-input" value="${s.img}" placeholder="${t('imgUrl')}" style="margin-bottom:8px;">
+                                <textarea id="edit-memo-${realIdx}" class="ios-input" style="height:60px;" placeholder="${t('memo')}">${s.memo}</textarea>
+                                <button class="btn-action btn-save" onclick="saveSpot(${realIdx})">${t('save')}</button>
+                                <button class="btn-action btn-del" onclick="deleteSpot(${realIdx})">${t('delete')}</button>
+                            </div>
+                        </div>`;
+                    } else {
+                        let thumbHtml = s.img.startsWith('http') ? `<img src="${s.img}" class="spot-thumb">` : `<div class="spot-thumb">${sortIdx+1}</div>`;
+                        let editBtnHtml = isEditMode ? `
+                            <div class="input-row" style="margin-top:8px;">
+                                <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="flex:1;" onclick="event.stopPropagation(); toggleComplete('spot', ${realIdx});">${isComp ? t('markIncomplete') : t('markComplete')}</button>
+                                <button class="btn-action" style="flex:1; border:1px solid var(--border);" onclick="event.stopPropagation(); editTarget=${realIdx}; renderView();">${t('edit')}</button>
+                            </div>
+                        ` : '';
+                        
+                        let mapBtnHtml = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
+
+                        return `
+                        <div class="card ${isComp?'completed':''}" onclick="focusSpot('${s.lat}', '${s.lng}')">
+                            ${thumbHtml}
+                            <div class="spot-info">
+                                <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${sortIdx+1}.</span> ${s.time} ${s.name}</span></div>
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                    <div class="cat-tag">${s.cat || '...'}</div>
+                                    ${mapBtnHtml}
+                                </div>
+                                <div class="spot-memo">${s.memo}</div>
+                                <div class="cost-row"><span>${s.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(s.cost*config.rate)} ${config.targetCurr})</span></div>
+                                ${editBtnHtml}
+                            </div>
+                        </div>`;
+                    }
+                }).join('');
+
+                if (isEditMode) {
+                    html += `
+                    <div class="card" style="flex-direction:column; background:var(--bg); border:1px dashed var(--border); margin-top:20px; cursor:default;">
+                        <div style="font-weight:700; margin-bottom:8px;">+ ${t('addSpot')}</div>
+                        <div class="input-row"><input id="new-time" class="ios-input" placeholder="${t('time')}" style="width:80px;"><input id="new-name" class="ios-input" placeholder="${t('name')}" style="flex:1;"></div>
+                        <div class="input-row">
+                            <select id="new-cat" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+                            <input id="new-cost" type="number" class="ios-input" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
+                        </div>
+                        <div class="input-row"><input id="new-lat" type="number" step="0.0001" class="ios-input" placeholder="${t('lat')}"><input id="new-lng" type="number" step="0.0001" class="ios-input" placeholder="${t('lng')}"></div>
+                        <input id="new-memo" class="ios-input" placeholder="${t('memo')}" style="margin-top:8px;">
+                        <button class="btn-action btn-save" onclick="addSpot()">${t('save')}</button>
+                    </div>`;
+                }
+                
+                port.innerHTML = html;
+
+            } else if (currentTab === 'overview') {
+                renderOverview(port);
+            }
+        } catch (error) {
+            console.error(error);
+            port.innerHTML = `<div style="padding:20px; color:var(--red);">UI Error: ${error.message}<br><button class="btn-action" style="margin-top:10px;" onclick="localStorage.clear(); location.reload();">Reset</button></div>`;
+        }
+    }
+
+    // --- CRUD ---
+    function addFlightUI() { itinerary[curIdx].flight = { airline: "AIRLINE", flightNo: "000", from: "AAA", to: "BBB", time: "12:00", seat: "1A", cost: 0, lat: 0, lng: 0, completed: false }; editTarget = 'flight'; save(); render(); }
+    function saveFlight() {
+        const d = itinerary[curIdx]; d.flight.airline = document.getElementById('f-air').value; d.flight.flightNo = document.getElementById('f-no').value; d.flight.from = document.getElementById('f-from').value; d.flight.to = document.getElementById('f-to').value; d.flight.time = document.getElementById('f-time').value; d.flight.seat = document.getElementById('f-seat').value; d.flight.cost = parseInt(document.getElementById('f-cost').value) || 0; d.flight.lat = parseFloat(document.getElementById('f-lat').value) || 0; d.flight.lng = parseFloat(document.getElementById('f-lng').value) || 0; editTarget = null; save(); render();
+    }
+    function deleteFlight() { itinerary[curIdx].flight = null; editTarget=null; save(); render(); }
+    function saveSpot(idx) {
+        const s = itinerary[curIdx].spots[idx]; s.time = document.getElementById(`edit-time-${idx}`).value; s.name = document.getElementById(`edit-name-${idx}`).value; s.cat = document.getElementById(`edit-cat-${idx}`).value; s.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0; s.img = document.getElementById(`edit-img-${idx}`).value; s.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0; s.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0; s.memo = document.getElementById(`edit-memo-${idx}`).value; editTarget = null; save(); render();
+    }
+    function addSpot() {
+        const name = document.getElementById('new-name').value; if(!name) return;
+        itinerary[curIdx].spots.push({ id: Date.now(), name, time: document.getElementById('new-time').value || "12:00", cat: document.getElementById('new-cat').value, cost: parseInt(document.getElementById('new-cost').value) || 0, img: "https://placehold.co/150", lat: parseFloat(document.getElementById('new-lat').value) || 0, lng: parseFloat(document.getElementById('new-lng').value) || 0, memo: document.getElementById('new-memo').value, completed: false });
+        save(); render();
+    }
+    function addEx() {
+        const jpy = parseInt(document.getElementById('ex-jpy').value), note = document.getElementById('ex-note').value, cat = document.getElementById('ex-cat').value;
+        if(!jpy) return; extras.push({ day: itinerary[curIdx].day, jpy, note: note || cat, category: cat }); save(); renderView();
+    }
+    function deleteSpot(idx) { itinerary[curIdx].spots.splice(idx,1); editTarget=null; save(); render(); }
+
+    // --- 5. 總覽與圖表 ---
+    function renderOverview(port) {
+        let spotBase = 0; let expDataObj = {}; let catCountObj = {}; 
+        let totalItems = 0; let completedItems = 0;
+        const catOpts = i18n[config.lang]['cats'];
+        catOpts.forEach(c => { expDataObj[c] = 0; catCountObj[c] = 0; });
+        
+        let expenseTableHtml = `
+            <table class="expense-table" style="margin-bottom:15px; width:100%;">
+                <thead><tr><th>${t('item')}</th><th style="text-align:right;">${config.baseCurr}</th><th style="text-align:right;">${config.targetCurr}</th></tr></thead>
+                <tbody>
+        `;
+
+        let allSpotsHtml = itinerary.map(d => {
+            let dExtra = extras.filter(e => e.day === d.day);
+            let dateStr = window.getDayDate(d.day);
+            let sorted = [...(d.spots||[])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
+            
+            let dayExpHtml = ''; let dayHasExpense = false;
+            let cardHtml = `<div style="margin-top:20px; font-weight:800; font-size:16px; color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:12px;">Day ${d.day} (${dateStr}) - ${d.summary}</div>`;
+
+            if(d.flight) {
+                totalItems++; if(d.flight.completed) completedItems++;
+                expDataObj[catOpts[11]] = (expDataObj[catOpts[11]]||0) + d.flight.cost; 
+                dayExpHtml += `<tr><td>[Flight] ${d.flight.flightNo}</td><td style="text-align:right;">-</td><td style="text-align:right;">${d.flight.cost}</td></tr>`;
+                dayHasExpense = true;
+                
+                cardHtml += `
+                    <div class="boarding-pass" style="cursor:default;">
+                        <div class="bp-main">
+                            <div style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px;">${d.flight.airline}</div>
+                            <div class="bp-route"><div class="bp-code" style="font-size:22px;">${d.flight.from}</div><div style="flex:1; text-align:center; color:var(--primary);">FLIGHT</div><div class="bp-code" style="font-size:22px;">${d.flight.to}</div></div>
+                            <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
+                                <div><b>${d.flight.flightNo}</b> | ${d.flight.time}</div>
+                                <div style="color:var(--primary); font-weight:bold;">${d.flight.cost} ${config.targetCurr}</div>
+                            </div>
+                        </div>
+                        <div class="bp-stub"><span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${d.flight.seat}</div></div>
+                    </div>`;
+            }
+
+            cardHtml += sorted.map((s, sortIdx) => {
+                totalItems++; if(s.completed) completedItems++;
+                spotBase += s.cost;
+                if(expDataObj[s.cat] !== undefined) expDataObj[s.cat] += Math.round(s.cost * config.rate);
+                if(catCountObj[s.cat] !== undefined) catCountObj[s.cat] += 1;
+                
+                if(s.cost > 0) {
+                    dayExpHtml += `<tr><td>[${s.cat}] ${s.name}</td><td style="text-align:right;">${s.cost}</td><td style="text-align:right;">${Math.round(s.cost*config.rate)}</td></tr>`;
+                    dayHasExpense = true;
+                }
+                let thumbHtml = s.img.startsWith('http') ? `<img src="${s.img}" class="spot-thumb">` : `<div class="spot-thumb">${sortIdx+1}</div>`;
+                let mapBtnHtml = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
+
+                return `
+                <div class="card" style="cursor:default;">
+                    ${thumbHtml}
+                    <div class="spot-info">
+                        <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${sortIdx+1}.</span> ${s.time} ${s.name}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <div class="cat-tag">${s.cat || '...'}</div>
+                            ${mapBtnHtml}
+                        </div>
+                        <div class="spot-memo">${s.memo}</div>
+                        <div class="cost-row"><span>${s.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(s.cost*config.rate)} ${config.targetCurr})</span></div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            dExtra.forEach(e => {
+                dayExpHtml += `<tr style="color:var(--secondary);"><td>[${e.category}] ${e.note}</td><td style="text-align:right;">${e.jpy}</td><td style="text-align:right;">${Math.round(e.jpy*config.rate)}</td></tr>`;
+                dayHasExpense = true;
+                cardHtml += `
+                <div class="card" style="cursor:default; align-items:center;">
+                    <div style="width:40px; height:40px; border-radius:12px; background:var(--tint); display:flex; align-items:center; justify-content:center; color:var(--primary); font-weight:bold; font-size:20px; flex-shrink:0;">$</div>
+                    <div class="spot-info">
+                        <div class="spot-title"><span style="color:var(--text);">${e.note}</span></div>
+                        <div class="cat-tag">${e.category}</div>
+                        <div class="cost-row" style="color:var(--red);"><span>${e.jpy} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(e.jpy*config.rate)} ${config.targetCurr})</span></div>
+                    </div>
+                </div>`;
+            });
+
+            if (dayHasExpense) {
+                expenseTableHtml += `<tr class="expense-day-row"><td colspan="3">Day ${d.day}</td></tr>` + dayExpHtml;
+            }
+
+            return cardHtml;
+        }).join('');
+        
+        expenseTableHtml += `</tbody></table>`;
+
+        let extraBase = 0;
+        extras.forEach(e => {
+            extraBase += e.jpy;
+            let valTarget = Math.round(e.jpy * config.rate);
+            if(expDataObj[e.category] !== undefined) expDataObj[e.category] += valTarget;
+        });
+
+        let flightTarget = itinerary.reduce((sum, d) => sum + (d.flight?d.flight.cost:0), 0);
+        let totalBase = spotBase + extraBase;
+        let totalTarget = Math.round(totalBase * config.rate) + flightTarget;
+
+        let expLabels = [], expData = [];
+        for (const [k, v] of Object.entries(expDataObj)) { if (v > 0) { expLabels.push(k); expData.push(v); } }
+
+        let catLabels = [], catData = [];
+        for (const [k, v] of Object.entries(catCountObj)) { if (v > 0) { catLabels.push(k); catData.push(v); } }
+
+        let stepsLabels = itinerary.map(d => `D${d.day}`);
+        let stepsData = itinerary.map(d => d.steps || 0);
+
+        let tripSummaryHtml = `
+            <div class="overview-panel">
+                <h4 style="margin:0 0 15px 0;">${t('tripSummary')}</h4>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    ${itinerary.map(d => `
+                        <div style="display:flex; align-items:center; font-size:13px; line-height:1.4;">
+                            <div style="background:var(--tint); color:var(--primary); font-weight:bold; padding:4px 8px; border-radius:6px; margin-right:12px; min-width:40px; text-align:center;">D${d.day}</div>
+                            <div style="flex:1;">
+                                <div style="font-weight:700; color:var(--text);">${d.summary}</div>
+                                <div style="font-size:11px; color:var(--secondary);">${window.getDayDate(d.day)}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+
+        port.innerHTML = `
+            <div class="page-break">
+                <div class="overview-panel" style="background:var(--primary); color:white; border:none;">
+                    <div style="font-size:13px; opacity:0.9;">${t('totalCost')}</div>
+                    <div style="font-size:32px; font-weight:800; margin:4px 0;">${totalTarget.toLocaleString()} ${config.targetCurr}</div>
+                    <div style="font-size:14px; opacity:0.9; margin-bottom:10px;">~ ${totalBase.toLocaleString()} ${config.baseCurr}</div>
+                    <button class="btn-action no-print" style="width:100%; background:rgba(255,255,255,0.2); color:white;" onclick="window.print()">${t('exportPDF')}</button>
+                </div>
+                ${tripSummaryHtml}
+            </div>
+
+            <div class="page-break">
+                <div class="overview-panel chart-print-panel">
+                    <h4 style="margin:0 0 15px 0;">${t('completionTitle')}</h4>
+                    <div class="chart-flex-container">
+                        <div class="chart-canvas-wrapper"><canvas id="completionChart"></canvas></div>
+                        <div class="chart-summary-list">
+                            <div class="chart-summary-item"><span>${t('completed')}</span><b>${completedItems}</b></div>
+                            <div class="chart-summary-item"><span>${t('incomplete')}</span><b>${totalItems - completedItems}</b></div>
+                            <div class="chart-summary-item"><span>Total</span><b>${totalItems}</b></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="overview-panel chart-print-panel">
+                    <h4 style="margin:0 0 15px 0;">${t('expenseTitle')} (${config.targetCurr})</h4>
+                    <div class="chart-flex-container">
+                        <div class="chart-canvas-wrapper"><canvas id="expenseChart"></canvas></div>
+                        <div class="chart-summary-list">
+                            ${expLabels.map((lbl, i) => `<div class="chart-summary-item"><span>${lbl}</span><b>${expData[i].toLocaleString()}</b></div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page-break">
+                <div class="overview-panel chart-print-panel">
+                    <h4 style="margin:0 0 15px 0;">${t('catTitle')}</h4>
+                    <div class="chart-flex-container">
+                        <div class="chart-canvas-wrapper"><canvas id="catChart"></canvas></div>
+                        <div class="chart-summary-list">
+                            ${catLabels.map((lbl, i) => `<div class="chart-summary-item"><span>${lbl}</span><b>${catData[i]}</b></div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+                <div class="overview-panel chart-print-panel">
+                    <h4 style="margin:0 0 15px 0;">${t('stepTitle')}</h4>
+                    <div class="bar-container"><canvas id="stepsChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="page-break">
+                <div class="overview-panel" style="padding:0; border:none; background:transparent;">
+                    <h4 style="margin:0 0 15px 0; padding-left:4px;">${t('expenseTable')}</h4>
+                    <div style="background:var(--card); border-radius:18px; padding:16px; border:1px solid var(--border);">
+                        ${expenseTableHtml}
+                    </div>
+                </div>
+            </div>
+
+            <div class="page-break">
+                <div style="font-weight:700; margin:20px 0 10px;">${t('allSpots')}</div>
+                ${allSpotsHtml}
+            </div>
+        `;
+
+        setTimeout(() => {
+            if(typeof Chart === 'undefined') return;
+            
+            const chartOptions = {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                layout: { padding: 20 },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+                        anchor: 'end', align: 'end', offset: 2, font: { size: 10, weight: 'bold' },
+                        formatter: (value, ctx) => {
+                            let sum = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+                            let percentage = (value * 100 / sum);
+                            if (percentage < 3) return ''; 
+                            return percentage.toFixed(0) + "%";
+                        }
+                    }
+                }
+            };
+            const colors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FF2D55', '#E5E5EA', '#1C1C1E'];
+
+            if(completionChart) completionChart.destroy();
+            completionChart = new Chart(document.getElementById('completionChart').getContext('2d'), {
+                type: 'doughnut', data: { labels: [t('completed'), t('incomplete')], datasets: [{ data: [completedItems, totalItems - completedItems], backgroundColor: ['#34C759', '#E5E5EA'], borderWidth: 1 }] }, options: chartOptions
+            });
+
+            if(expenseChart) expenseChart.destroy();
+            expenseChart = new Chart(document.getElementById('expenseChart').getContext('2d'), {
+                type: 'doughnut', data: { labels: expLabels, datasets: [{ data: expData, backgroundColor: colors, borderWidth: 1 }] }, options: chartOptions
+            });
+
+            if(categoryChart) categoryChart.destroy();
+            categoryChart = new Chart(document.getElementById('catChart').getContext('2d'), {
+                type: 'doughnut', data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: colors, borderWidth: 1 }] }, options: chartOptions
+            });
+
+            if(stepsChart) stepsChart.destroy();
+            stepsChart = new Chart(document.getElementById('stepsChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: stepsLabels, datasets: [{ data: stepsData, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(), borderRadius: 4 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 20 } },
+                    plugins: { legend: { display: false }, datalabels: { color: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(), anchor: 'end', align: 'top', font: { size: 10, weight: 'bold' }, formatter: (v) => v > 0 ? v : '' } },
+                    scales: { y: { beginAtZero: true, suggestedMax: Math.max(...stepsData, 10000) * 1.2 } }
+                }
+            });
+        }, 100);
+    }
+
+    // --- 6. 設定管理 ---
+    function renderSettingsDays() {
+        tempItinerary = JSON.parse(JSON.stringify(itinerary));
+        renderSettingsDaysList();
+    }
+
+    function renderSettingsDaysList() {
+        let html = tempItinerary.map((d, idx) => `
+            <div class="day-mgt-row">
+                <b style="width:30px; font-size:14px;">D${idx+1}</b>
+                <input class="ios-input" value="${d.summary}" placeholder="Name" style="flex:2; min-height:36px; margin:0;" onchange="tempItinerary[${idx}].summary=this.value">
+                <input type="number" class="ios-input" value="${d.steps || 0}" placeholder="Steps" style="flex:1; min-height:36px; margin:0;" onchange="tempItinerary[${idx}].steps=parseInt(this.value)||0">
+                <button class="btn-action btn-del" style="width:40px; min-height:36px; margin:0; padding:0;" onclick="deleteDayInSettings(${idx})">X</button>
+            </div>
+        `).join('');
+        document.getElementById('settings-days-list').innerHTML = html;
+    }
+
+    function addDayInSettings() { tempItinerary.push({ day: tempItinerary.length + 1, summary: "New Day", steps: 0, spots: [] }); renderSettingsDaysList(); }
+    function deleteDayInSettings(idx) { if(confirm(t('delete') + "?")) { tempItinerary.splice(idx, 1); tempItinerary.forEach((d, i) => d.day = i + 1); renderSettingsDaysList(); } }
+
+    function openSettings() {
+        document.getElementById('cfg-lang').value = config.lang; document.getElementById('cfg-base-theme').value = config.baseTheme; document.getElementById('cfg-accent').value = config.accent;
+        document.getElementById('cfg-title').value = config.title; document.getElementById('cfg-date').value = config.startDate;
+        document.getElementById('cfg-base').value = config.baseCurr; document.getElementById('cfg-target').value = config.targetCurr; document.getElementById('cfg-rate').value = config.rate; 
+        renderSettingsDays();
+        document.getElementById('settings-modal').style.display = 'flex';
+    }
+    function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+    function saveSettings() {
+        config.title = document.getElementById('cfg-title').value || "Trip"; config.startDate = document.getElementById('cfg-date').value || "2026-03-25";
+        config.baseCurr = document.getElementById('cfg-base').value || "JPY"; config.targetCurr = document.getElementById('cfg-target').value || "TWD";
+        config.rate = parseFloat(document.getElementById('cfg-rate').value) || 0.21;
+        itinerary = JSON.parse(JSON.stringify(tempItinerary)); curIdx = 0; 
+        localStorage.setItem('v83_config', JSON.stringify(config));
+        applyTranslation(true); applyTheme(true); save(); closeSettings(); render();
+    }
+
+    function save() { localStorage.setItem('v83_data', JSON.stringify(itinerary)); localStorage.setItem('v83_extras', JSON.stringify(extras)); }
+    function switchTab(t) { currentTab = t; document.querySelectorAll('.tab-item').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); editTarget = null; isEditMode = false; render(); }
+    function toggleExpand() { isExpanded = !isExpanded; document.getElementById('main-drawer').style.height = isExpanded ? '92%':'60%'; }
+</script>
+</body>
+</html>
