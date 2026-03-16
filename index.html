@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
     <style>
         :root { 
@@ -47,22 +48,31 @@
 
         .scroll-area { flex: 1; overflow-y: auto; padding: 0 16px 100px; }
 
+        /* 拖曳把手與卡片 */
+        .drag-handle { font-size: 24px; color: #C7C7CC; padding: 0 10px; display: flex; align-items: center; cursor: grab; transition: color 0.2s; }
+        .drag-handle:active { cursor: grabbing; color: var(--primary); }
+        .sortable-ghost { opacity: 0.4; }
+
         /* 登機證與卡片 */
-        .boarding-pass { display: flex; background: var(--card); border-radius: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; overflow: hidden; cursor: pointer; color: var(--text); transition: opacity 0.3s; }
+        .boarding-pass { display: flex; background: var(--card); border-radius: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; overflow: hidden; color: var(--text); transition: opacity 0.3s; }
         .boarding-pass::before, .boarding-pass::after { content: ''; position: absolute; top: 50%; width: 24px; height: 24px; background: var(--bg); border-radius: 50%; transform: translateY(-50%); z-index: 2; border: 1px solid var(--border); }
         .boarding-pass::before { left: -13px; border-right-color: transparent; }
         .boarding-pass::after { right: -13px; border-left-color: transparent; }
         .bp-main { flex: 7; padding: 16px; border-right: 2px dashed var(--border); }
         .bp-stub { flex: 3; padding: 16px; background: var(--tint); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        .bp-train .bp-stub { background: rgba(52, 199, 89, 0.1); }
+        .bp-train .bp-main-title { color: var(--green) !important; }
+        .bp-subway .bp-stub { background: rgba(175, 82, 222, 0.1); }
+        .bp-subway .bp-main-title { color: #AF52DE !important; }
 
-        .card { background: var(--card); border-radius: 18px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; transition: opacity 0.3s; cursor: pointer; }
+        .card { background: var(--card); border-radius: 18px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; transition: opacity 0.3s; }
         .completed { opacity: 0.5; filter: grayscale(60%); }
         .spot-thumb { width: 75px; height: 75px; border-radius: 12px; object-fit: cover; background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--primary); font-weight: bold; overflow: hidden; }
         .spot-info { flex: 1; min-width: 0; color: var(--text); }
         .spot-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: flex-start; }
         .spot-memo { font-size: 12px; color: var(--secondary); line-height: 1.4; margin: 6px 0 2px 0; }
         
-        /* 標籤與 Map 按鈕設計 */
         .cat-tag { font-size: 10px; color: var(--primary); background: var(--tint); padding: 3px 6px; border-radius: 6px; font-weight: bold; }
         .btn-map { font-size: 10px; font-weight: bold; color: var(--primary); background: var(--tint); padding: 3px 8px; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: opacity 0.2s; border: 1px solid var(--tint); }
         .btn-map:active { opacity: 0.6; }
@@ -99,15 +109,15 @@
         .fab-btn { display: none; position: fixed; bottom: 30px; right: 20px; width: 56px; height: 56px; border-radius: 28px; background: var(--primary); color: white; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 100; cursor: pointer; justify-content: center; align-items: center; transition: background 0.3s; }
         #fab-edit { bottom: 100px; }
 
-        /* 模態彈窗 */
+        /* 模態彈窗 (設定) */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; backdrop-filter: blur(5px); padding: 20px; }
         .modal-content { background: var(--card); color: var(--text); width: 100%; max-width: 400px; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); }
         .day-mgt-row { display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px; border-radius: 8px; margin-bottom: 8px;}
 
-        /* PDF 列印保護 */
+        /* PDF 列印完美比例保護 */
         @media print { 
             @page { size: A4 portrait; margin: 15mm; }
-            .no-print, .fab-btn, .leaflet-control-container { display: none !important; } 
+            .no-print, .fab-btn, .leaflet-control-container, .drag-handle { display: none !important; } 
             .content { position: static !important; height: auto !important; display: block !important; background: white !important; box-shadow: none !important; border-radius: 0 !important; }
             .scroll-area { overflow: visible !important; height: auto !important; padding: 0 !important; }
             body { overflow: visible !important; height: auto !important; background: white !important; color: black !important; }
@@ -160,49 +170,31 @@
         <h3 id="lbl-settings-title" style="margin-top:0; border-bottom: 2px solid var(--border); padding-bottom: 10px;">Settings</h3>
         
         <div class="input-row" style="margin-bottom:10px;">
-            <div style="flex:1;">
-                <div class="input-label" id="lbl-lang">Language</div>
-                <select id="cfg-lang" class="ios-input" onchange="applyTranslation(true)">
-                    <option value="zh-TW">繁體中文</option><option value="en">English</option>
-                </select>
-            </div>
-            <div style="flex:1;">
-                <div class="input-label" id="lbl-base-theme">Base Theme</div>
-                <select id="cfg-base-theme" class="ios-input" onchange="applyTheme(true)">
-                    <option value="light">Light</option><option value="dark">Dark</option>
-                </select>
-            </div>
+            <div style="flex:1;"><div class="input-label" id="lbl-lang">Language</div><select id="cfg-lang" class="ios-input" onchange="applyTranslation(true)"><option value="zh-TW">繁體中文</option><option value="en">English</option></select></div>
+            <div style="flex:1;"><div class="input-label" id="lbl-base-theme">Base Theme</div><select id="cfg-base-theme" class="ios-input" onchange="applyTheme(true)"><option value="light">Light</option><option value="dark">Dark</option></select></div>
         </div>
         <div class="input-label" id="lbl-accent">Accent Color</div>
         <select id="cfg-accent" class="ios-input" onchange="applyTheme(true)" style="margin-bottom:10px;">
             <option value="blue">Blue</option><option value="orange">Orange</option>
             <option value="mono">Mono</option><option value="gray">Gray</option>
         </select>
-
-        <div class="input-label" id="lbl-trip-name">Trip Name</div>
-        <input id="cfg-title" class="ios-input">
-        
-        <div class="input-label" id="lbl-start-date">Start Date</div>
-        <input id="cfg-date" type="date" class="ios-input">
-        
+        <div class="input-label" id="lbl-trip-name">Trip Name</div><input id="cfg-title" class="ios-input">
+        <div class="input-label" id="lbl-start-date">Start Date</div><input id="cfg-date" type="date" class="ios-input">
         <div class="input-row">
             <div style="flex:1;"><div class="input-label" id="lbl-base-curr">Base Curr</div><input id="cfg-base" class="ios-input"></div>
             <div style="flex:1;"><div class="input-label" id="lbl-target-curr">Target Curr</div><input id="cfg-target" class="ios-input"></div>
         </div>
-        
-        <div class="input-label" id="lbl-rate">Rate</div>
-        <input id="cfg-rate" type="number" step="0.001" class="ios-input">
-        
+        <div class="input-label" id="lbl-rate">Rate</div><input id="cfg-rate" type="number" step="0.001" class="ios-input">
         <h4 id="lbl-day-mgt" style="margin: 15px 0 5px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">Days Management</h4>
         <div id="settings-days-list" style="margin-bottom: 10px;"></div>
         <button class="btn-action" id="btn-add-day" style="border: 1px dashed var(--primary); background: transparent;" onclick="addDayInSettings()">Add Day</button>
-
         <button class="btn-action btn-save" id="btn-save-settings" style="margin-top: 20px;" onclick="saveSettings()">Save</button>
         <button class="btn-action" id="btn-cancel-settings" style="background:var(--bg); color:var(--text);" onclick="closeSettings()">Cancel</button>
     </div>
 </div>
 
 <script>
+    // --- 1. 全域工具 ---
     if (typeof window !== 'undefined') {
         window.getDayDate = function(dayNum) {
             if(!config || !config.startDate) return "YYYY-MM-DD";
@@ -210,30 +202,33 @@
             d.setDate(d.getDate() + (dayNum - 1));
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         };
+        window.formatCoord = function(lat, lng) { return `${Math.abs(lat).toFixed(4)}N ${Math.abs(lng).toFixed(4)}E`; };
     }
     if (typeof ChartDataLabels !== 'undefined') { Chart.register(ChartDataLabels); }
 
+    // --- 翻譯字典 ---
     const i18n = {
         'zh-TW': {
             'itinerary': '日行程', 'overview': '總覽', 'quickExpense': '快速記帳', 'addSpot': '新增行程',
-            'save': '儲存', 'delete': '刪除', 'cancel': '取消', 'nav': '導航', 'edit': '編輯', 'mapBtn': 'Map',
+            'save': '儲存', 'delete': '刪除', 'cancel': '取消', 'mapBtn': 'Map', 'edit': '編輯',
             'expenseTitle': '消費預算分析', 'catTitle': '行程分類數量', 'stepTitle': '每日步數紀錄', 'completionTitle': '行程完成率',
-            'exportPDF': '匯出 PDF', 'totalCost': '預估總支出', 'expenseTable': '花費支出彙整表', 'addFlight': '新增航班', 'tripSummary': '行程概述',
+            'exportPDF': '匯出 PDF', 'totalCost': '預估總支出', 'expenseTable': '花費支出彙整表', 'addTicket': '新增票券', 'tripSummary': '行程概述',
             'settingsTitle': '系統參數設定', 'lang': '介面語言', 'baseTheme': '主色主題', 'accent': '強調副色', 
-            'light': '亮色 (Light)', 'dark': '暗色 (Dark)', 'blue': '藍色 (Blue)', 'orange': '橘色 (Orange)', 'mono': '黑白 (Mono)', 'gray': '灰色 (Gray)',
+            'light': '亮色', 'dark': '暗色', 'blue': '藍色', 'orange': '橘色', 'mono': '黑白', 'gray': '灰色',
             'tripName': '行程名稱', 'startDate': '出發日期', 'baseCurr': '基礎幣種', 'targetCurr': '目標幣種', 
             'rate': '匯率', 'dayMgt': '天數與步數管理', 'addDay': '新增一天', 'saveSettings': '儲存設定',
             'markComplete': '標記完成', 'markIncomplete': '取消完成', 'completed': '已完成', 'incomplete': '未完成',
             'item': '項目', 'category': '分類', 'baseCost': '原幣花費', 'targetCost': '換算花費', 'day': '第', 'dayUnit': '天',
             'time': '時間', 'name': '名稱', 'lat': '緯度', 'lng': '經度', 'memo': '簡介備註...', 'imgUrl': '圖片網址', 'expNote': '花費說明', 'amount': '金額',
-            'flightAndNo': '航空與航班號', 'locLatLng': '機場座標 (緯度/經度)', 'routeTime': '起降與時間', 'seatCost': '座位與費用',
+            'ticketType': '票券類型', 'flightAndNo': '營運公司與班次', 'locLatLng': '出發座標 (緯/經)', 'routeTime': '起降與時間', 'seatCost': '座位與費用',
+            'flight': '飛機', 'train': '火車/高鐵', 'subway': '地鐵/巴士', 'sortByTime': '依時間排序',
             'cats': ["美食", "鐵路", "博物館", "美術館", "科學館", "航太館", "自然景點", "交通點", "觀光名勝", "古蹟", "住宿", "航班", "其他"]
         },
         'en': {
             'itinerary': 'Itinerary', 'overview': 'Overview', 'quickExpense': 'Quick Expense', 'addSpot': 'Add Spot',
-            'save': 'Save', 'delete': 'Delete', 'cancel': 'Cancel', 'nav': 'Nav', 'edit': 'Edit', 'mapBtn': 'Map',
+            'save': 'Save', 'delete': 'Delete', 'cancel': 'Cancel', 'mapBtn': 'Map', 'edit': 'Edit',
             'expenseTitle': 'Expense Analysis', 'catTitle': 'Category Count', 'stepTitle': 'Daily Steps', 'completionTitle': 'Completion Rate',
-            'exportPDF': 'Export PDF', 'totalCost': 'Est. Total Cost', 'expenseTable': 'Expense Summary', 'addFlight': 'Add Flight', 'tripSummary': 'Trip Summary',
+            'exportPDF': 'Export PDF', 'totalCost': 'Est. Total Cost', 'expenseTable': 'Expense Summary', 'addTicket': 'Add Ticket', 'tripSummary': 'Trip Summary',
             'settingsTitle': 'System Settings', 'lang': 'Language', 'baseTheme': 'Base Theme', 'accent': 'Accent Color',
             'light': 'Light', 'dark': 'Dark', 'blue': 'Blue', 'orange': 'Orange', 'mono': 'Mono', 'gray': 'Gray',
             'tripName': 'Trip Name', 'startDate': 'Start Date', 'baseCurr': 'Base Curr', 'targetCurr': 'Target Curr', 
@@ -241,7 +236,8 @@
             'markComplete': 'Complete', 'markIncomplete': 'Undo', 'completed': 'Completed', 'incomplete': 'Pending',
             'item': 'Item', 'category': 'Category', 'baseCost': 'Base Cost', 'targetCost': 'Converted', 'day': 'Day ', 'dayUnit': '',
             'time': 'Time', 'name': 'Name', 'lat': 'Lat', 'lng': 'Lng', 'memo': 'Memo...', 'imgUrl': 'Image URL', 'expNote': 'Expense Note', 'amount': 'Amount',
-            'flightAndNo': 'Airline & Flight No', 'locLatLng': 'Location (Lat/Lng)', 'routeTime': 'Route & Time', 'seatCost': 'Seat & Cost',
+            'ticketType': 'Ticket Type', 'flightAndNo': 'Company & No', 'locLatLng': 'Location (Lat/Lng)', 'routeTime': 'Route & Time', 'seatCost': 'Seat & Cost',
+            'flight': 'Flight', 'train': 'Train/HSR', 'subway': 'Subway/Bus', 'sortByTime': 'Sort by Time',
             'cats': ["Food", "Railway", "Museum", "Art Gallery", "Science", "Aerospace", "Nature", "Transit", "Attraction", "Historic", "Hotel", "Flight", "Others"]
         }
     };
@@ -251,11 +247,11 @@
         catch(e) { return fallback; }
     }
 
-    let defaultConfig = { title: "2026 日本航太考察", baseCurr: "JPY", targetCurr: "TWD", rate: 0.21, startDate: "2026-03-25", lang: "zh-TW", baseTheme: "light", accent: "blue" };
-    let config = safeParse('v83_config', defaultConfig);
+    let defaultConfig = { title: "2026 日本航太考察", baseCurr: "JPY", targetCurr: "TWD", rate: 0.21, startDate: "2026-03-22", lang: "zh-TW", baseTheme: "light", accent: "blue" };
+    let config = safeParse('v88_config', defaultConfig); // V88 金鑰
     if(!config.lang) config.lang = 'zh-TW'; if(!config.baseTheme) config.baseTheme = 'light'; if(!config.accent) config.accent = 'blue';
 
-    let extras = safeParse('v83_extras', []);
+    let extras = safeParse('v88_extras', []); // V88 金鑰
     let editTarget = null; let expenseChart = null; let categoryChart = null; let stepsChart = null; let completionChart = null;
     let tempItinerary = [];
     let curIdx = 0, currentTab = 'itinerary', map, pathLine, isExpanded = false, isEditMode = false;
@@ -310,49 +306,65 @@
         renderView();
     }
 
-    // --- 資料載入 ---
+    // --- 2. V88 全新行程陣列庫 (使用者指定版) ---
     const initialData = [
-        { day: 1, summary: "科學啟航", steps: 0, flight: { airline: "EVA AIR", flightNo: "BR198", from: "TPE", to: "NGO", time: "08:50", seat: "22K", cost: 15000, lat: 34.8584, lng: 136.8054, completed: false }, spots: [
-            { id: 1, time: "11:00", name: "名古屋市科學館", cat: "科學館", cost: 800, lat: 35.1652, lng: 136.8997, memo: "天文館直徑35m", img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150", completed: false },
-            { id: 2, time: "15:00", name: "名古屋市美術館", cat: "美術館", cost: 500, lat: 35.1643, lng: 136.9015, memo: "現代藝術", img: "https://placehold.co/150?text=Art", completed: false },
-            { id: 3, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "車站周邊", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 1, summary: "名古屋", steps: 0, items: [
+            { id: "s1_1", type: "spot", time: "15:30", name: "中部國際機場", cat: "交通點", cost: 0, lat: 34.8584, lng: 136.8054, memo: "營業時間：全天", img: "https://placehold.co/150?text=Airport", completed: false },
+            { id: "t1_2", type: "train", name: "名鐵", no: "機場線", from: "NGO", to: "名古屋", time: "16:10", seat: "自由席", cost: 1250, lat: 34.8584, lng: 136.8054, memo: "約28分到名古屋", completed: false },
+            { id: "s1_3", type: "spot", time: "17:30", name: "名古屋市科學館", cat: "科學館", cost: 800, lat: 35.1652, lng: 136.8997, memo: "營業時間 09:30–17:00（若太晚改隔天）", img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150", completed: false },
+            { id: "s1_4", type: "spot", time: "19:00", name: "名古屋晚餐", cat: "美食", cost: 2000, lat: 35.1709, lng: 136.8815, memo: "名古屋名物", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s1_5", type: "spot", time: "20:30", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 2, summary: "工業科技日", steps: 0, flight: null, spots: [
-            { id: 4, time: "09:30", name: "豐田產業技術紀念館", cat: "博物館", cost: 500, lat: 35.1802, lng: 136.8767, memo: "工業革命", img: "https://images.unsplash.com/photo-1533106497176-45ae19e68ba2?w=150", completed: false },
-            { id: 5, time: "13:30", name: "磁浮鐵道館", cat: "鐵路", cost: 1000, lat: 35.0506, lng: 136.8509, memo: "L0系實體車", img: "https://images.unsplash.com/photo-1532105956626-9569c03602f6?w=150", completed: false },
-            { id: 6, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 2, summary: "高山＋白川鄉", steps: 0, items: [
+            { id: "s2_1", type: "spot", time: "07:45", name: "名古屋站", cat: "交通點", cost: 0, lat: 35.1709, lng: 136.8815, memo: "準備搭乘JR", img: "https://placehold.co/150?text=Station", completed: false },
+            { id: "t2_2", type: "train", name: "JR特急", no: "飛驒", from: "名古屋", to: "高山", time: "08:00", seat: "指定席", cost: 6000, lat: 35.1709, lng: 136.8815, memo: "約2h20", completed: false },
+            { id: "s2_3", type: "spot", time: "10:20", name: "飛驒高山老街", cat: "觀光名勝", cost: 0, lat: 36.1424, lng: 137.2588, memo: "商店約9:00–17:00", img: "https://placehold.co/150?text=Takayama", completed: false },
+            { id: "t2_4", type: "subway", name: "濃飛巴士", no: "白川鄉線", from: "高山", to: "白川鄉", time: "13:00", seat: "自由席", cost: 2600, lat: 36.1415, lng: 137.2570, memo: "前往白川鄉", completed: false },
+            { id: "s2_5", type: "spot", time: "14:00", name: "白川鄉合掌村", cat: "自然景點", cost: 0, lat: 36.2585, lng: 136.9067, memo: "村落全天開放", img: "https://placehold.co/150?text=Shirakawa", completed: false },
+            { id: "t2_6", type: "subway", name: "濃飛巴士", no: "高山線", from: "白川鄉", to: "高山", time: "16:30", seat: "自由席", cost: 2600, lat: 36.2585, lng: 136.9067, memo: "返回高山", completed: false },
+            { id: "t2_7", type: "train", name: "JR特急", no: "飛驒", from: "高山", to: "名古屋", time: "18:00", seat: "指定席", cost: 6000, lat: 36.1415, lng: 137.2570, memo: "回名古屋", completed: false },
+            { id: "s2_8", type: "spot", time: "20:30", name: "名古屋晚餐", cat: "美食", cost: 2000, lat: 35.1709, lng: 136.8815, memo: "市區晚餐", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s2_9", type: "spot", time: "21:30", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 3, summary: "航太核心", steps: 0, flight: null, spots: [
-            { id: 7, time: "09:30", name: "愛知飛行博物館", cat: "航太館", cost: 1000, lat: 35.2458, lng: 136.9242, memo: "MRJ研發歷程", img: "https://placehold.co/150?text=MRJ", completed: false },
-            { id: 8, time: "13:30", name: "岐阜航空宇宙博物館", cat: "航太館", cost: 800, lat: 35.3853, lng: 136.8533, memo: "H-II火箭引擎", img: "https://placehold.co/150?text=Aero", completed: false },
-            { id: 9, time: "18:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 3, summary: "名古屋科技日", steps: 0, items: [
+            { id: "s3_1", type: "spot", time: "09:30", name: "豐田產業技術紀念館", cat: "博物館", cost: 500, lat: 35.1802, lng: 136.8767, memo: "營業時間 09:30–17:00", img: "https://images.unsplash.com/photo-1533106497176-45ae19e68ba2?w=150", completed: false },
+            { id: "s3_2", type: "spot", time: "13:00", name: "磁浮鐵道館", cat: "鐵路", cost: 1000, lat: 35.0506, lng: 136.8509, memo: "營業時間 10:00–17:30", img: "https://images.unsplash.com/photo-1532105956626-9569c03602f6?w=150", completed: false },
+            { id: "s3_3", type: "spot", time: "16:00", name: "諾力塔克之森", cat: "博物館", cost: 500, lat: 35.1784, lng: 136.8824, memo: "約10:00–18:00", img: "https://placehold.co/150?text=Noritake", completed: false },
+            { id: "s3_4", type: "spot", time: "19:00", name: "榮商圈晚餐", cat: "美食", cost: 2500, lat: 35.1683, lng: 136.9080, memo: "商圈晚餐", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s3_5", type: "spot", time: "21:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 4, summary: "自衛隊與樂器", steps: 0, flight: null, spots: [
-            { id: 10, time: "09:00", name: "東海道新幹線前往濱松", cat: "鐵路", cost: 4500, lat: 34.7037, lng: 137.7347, memo: "移動日", img: "https://placehold.co/150?text=Transit", completed: false },
-            { id: 11, time: "10:00", name: "航空自衛隊廣報館", cat: "航太館", cost: 0, lat: 34.7431, lng: 137.6976, memo: "F-2 戰機", img: "https://placehold.co/150?text=JASDF", completed: false },
-            { id: 12, time: "14:00", name: "濱松樂器博物館", cat: "博物館", cost: 800, lat: 34.7061, lng: 137.7345, memo: "世界級樂器館", img: "https://placehold.co/150?text=Music", completed: false },
-            { id: 13, time: "18:00", name: "濱松住宿", cat: "住宿", cost: 10000, lat: 34.7037, lng: 137.7347, memo: "車站周圍", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 4, summary: "航太日", steps: 0, items: [
+            { id: "s4_1", type: "spot", time: "09:30", name: "愛知飛行博物館", cat: "航太館", cost: 1000, lat: 35.2458, lng: 136.9242, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=MRJ", completed: false },
+            { id: "s4_2", type: "spot", time: "12:30", name: "午餐", cat: "美食", cost: 1500, lat: 35.2458, lng: 136.9242, memo: "博物館周邊或園區內", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s4_3", type: "spot", time: "14:00", name: "岐阜各務原航空宇宙博物館", cat: "航太館", cost: 800, lat: 35.3853, lng: 136.8533, memo: "營業時間 09:30–17:00", img: "https://placehold.co/150?text=Aero", completed: false },
+            { id: "t4_4", type: "train", name: "新幹線", no: "Hikari", from: "名古屋", to: "濱松", time: "18:00", seat: "自由席", cost: 4500, lat: 35.1709, lng: 136.8815, memo: "名古屋→濱松", completed: false },
+            { id: "s4_5", type: "spot", time: "19:30", name: "濱松住宿", cat: "住宿", cost: 10000, lat: 34.7037, lng: 137.7347, memo: "車站周邊", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 5, summary: "松本藝術", steps: 0, flight: null, spots: [
-            { id: 14, time: "09:00", name: "JR前往松本", cat: "鐵路", cost: 5500, lat: 36.2331, lng: 137.9717, memo: "山區移動", img: "https://placehold.co/150?text=Transit", completed: false },
-            { id: 15, time: "11:00", name: "松本市美術館", cat: "美術館", cost: 410, lat: 36.2312, lng: 137.9786, memo: "草間彌生", img: "https://placehold.co/150?text=Kusama", completed: false },
-            { id: 16, time: "15:00", name: "松本市天文館", cat: "科學館", cost: 300, lat: 36.2577, lng: 137.9861, memo: "地方觀測", img: "https://placehold.co/150?text=Astro", completed: false },
-            { id: 17, time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 5, summary: "濱松", steps: 0, items: [
+            { id: "s5_1", type: "spot", time: "09:00", name: "航空自衛隊濱松廣報館", cat: "航太館", cost: 0, lat: 34.7431, lng: 137.6976, memo: "營業時間 09:00–16:00", img: "https://placehold.co/150?text=JASDF", completed: false },
+            { id: "s5_2", type: "spot", time: "12:00", name: "午餐", cat: "美食", cost: 1500, lat: 34.7431, lng: 137.6976, memo: "基地附近", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s5_3", type: "spot", time: "13:30", name: "濱松樂器博物館", cat: "博物館", cost: 800, lat: 34.7061, lng: 137.7345, memo: "營業時間 09:30–17:00", img: "https://placehold.co/150?text=Music", completed: false },
+            { id: "t5_4", type: "train", name: "JR", no: "信濃", from: "濱松", to: "松本", time: "16:30", seat: "指定席", cost: 5500, lat: 34.7037, lng: 137.7347, memo: "濱松→松本", completed: false },
+            { id: "s5_5", type: "spot", time: "20:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 6, summary: "長野視覺傳達", steps: 0, flight: null, spots: [
-            { id: 18, time: "10:00", name: "長野縣立美術館", cat: "美術館", cost: 700, lat: 36.6625, lng: 138.1885, memo: "極簡建築", img: "https://placehold.co/150?text=Nagano", completed: false },
-            { id: 19, time: "14:00", name: "日本浮世繪博物館", cat: "博物館", cost: 1000, lat: 36.2335, lng: 137.9405, memo: "最大私人收藏", img: "https://placehold.co/150?text=Ukiyo", completed: false },
-            { id: 20, time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "同上", img: "https://placehold.co/150?text=Hotel", completed: false }
+        { day: 6, summary: "松本", steps: 0, items: [
+            { id: "s6_1", type: "spot", time: "09:00", name: "松本城", cat: "觀光名勝", cost: 700, lat: 36.2388, lng: 137.9691, memo: "營業時間 08:30–17:00", img: "https://placehold.co/150?text=Castle", completed: false },
+            { id: "s6_2", type: "spot", time: "11:30", name: "午餐", cat: "美食", cost: 1500, lat: 36.2388, lng: 137.9691, memo: "城區附近", img: "https://placehold.co/150?text=Food", completed: false },
+            { id: "s6_3", type: "spot", time: "13:00", name: "松本市美術館", cat: "美術館", cost: 410, lat: 36.2312, lng: 137.9786, memo: "營業時間 09:00–17:00", img: "https://placehold.co/150?text=Art", completed: false },
+            { id: "s6_4", type: "spot", time: "15:30", name: "日本浮世繪博物館", cat: "博物館", cost: 1000, lat: 36.2335, lng: 137.9405, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Ukiyo", completed: false },
+            { id: "s6_5", type: "spot", time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
         ]},
-        { day: 7, summary: "工藝收尾", steps: 0, flight: { airline: "EVA AIR", flightNo: "BR197", from: "NGO", to: "TPE", time: "16:30", seat: "25A", cost: 0, lat: 34.8584, lng: 136.8054, completed: false }, spots: [
-            { id: 21, time: "08:00", name: "JR特急信濃回名古屋", cat: "鐵路", cost: 3000, lat: 35.17, lng: 136.88, memo: "返程", img: "https://placehold.co/150?text=Transit", completed: false },
-            { id: 22, time: "10:00", name: "德川美術館", cat: "博物館", cost: 1400, lat: 35.1838, lng: 136.9332, memo: "江戶器物", img: "https://placehold.co/150?text=Tokugawa", completed: false }
+        { day: 7, summary: "回名古屋", steps: 0, items: [
+            { id: "t7_1", type: "train", name: "JR特急信濃", no: "Shinano", from: "松本", to: "名古屋", time: "09:00", seat: "指定席", cost: 6000, lat: 36.2331, lng: 137.9717, memo: "松本→名古屋", completed: false },
+            { id: "s7_2", type: "spot", time: "11:30", name: "德川美術館", cat: "博物館", cost: 1400, lat: 35.1838, lng: 136.9332, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Tokugawa", completed: false },
+            { id: "s7_3", type: "spot", time: "14:00", name: "橫山美術館", cat: "美術館", cost: 1000, lat: 35.1738, lng: 136.9224, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Art", completed: false },
+            { id: "t7_4", type: "flight", name: "EVA AIR", no: "BR197", from: "NGO", to: "TPE", time: "18:00", seat: "25A", cost: 0, lat: 34.8584, lng: 136.8054, memo: "返程", completed: false }
         ]}
     ];
 
-    let itinerary = safeParse('v83_data', initialData);
+    let itinerary = safeParse('v88_data', initialData);
     if (!Array.isArray(itinerary) || itinerary.length === 0) { itinerary = JSON.parse(JSON.stringify(initialData)); }
-    itinerary.forEach(d => { if(!d.spots) d.spots = []; if(typeof d.steps !== 'number') d.steps = 0; });
+    itinerary.forEach(d => { if(!d.items) d.items = []; if(typeof d.steps !== 'number') d.steps = 0; });
 
     window.onload = () => {
         document.getElementById('cfg-lang').value = config.lang; document.getElementById('cfg-base-theme').value = config.baseTheme; document.getElementById('cfg-accent').value = config.accent;
@@ -388,22 +400,19 @@
         try {
             if (currentTab === 'overview') {
                 itinerary.forEach(d => {
-                    let spotIdx = 1;
-                    if (d.flight && d.flight.lat) pts.push({ lat: parseFloat(d.flight.lat), lng: parseFloat(d.flight.lng), title: d.flight.from, index: `D${d.day}-F` });
-                    let sorted = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
-                    sorted.forEach((s) => {
-                        let sLat = parseFloat(s.lat); let sLng = parseFloat(s.lng);
-                        if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: s.name, index: `D${d.day}-${spotIdx}` }); spotIdx++; }
+                    let itemIdx = 1;
+                    (d.items || []).forEach(item => {
+                        let sLat = parseFloat(item.lat); let sLng = parseFloat(item.lng);
+                        if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: item.name || item.from, index: `D${d.day}-${itemIdx}` }); itemIdx++; }
                     });
                 });
             } else {
                 if(!itinerary[curIdx]) return;
                 const d = itinerary[curIdx];
-                if (d.flight && d.flight.lat) pts.push({ lat: parseFloat(d.flight.lat), lng: parseFloat(d.flight.lng), title: d.flight.from, index: "F" });
-                let sorted = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
-                sorted.forEach((s, index) => {
-                    let sLat = parseFloat(s.lat); let sLng = parseFloat(s.lng);
-                    if(!isNaN(sLat) && sLat !== 0) pts.push({ lat: sLat, lng: sLng, title: s.name, index: index + 1 });
+                let itemIdx = 1;
+                (d.items || []).forEach(item => {
+                    let sLat = parseFloat(item.lat); let sLng = parseFloat(item.lng);
+                    if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: item.name || item.from, index: itemIdx }); itemIdx++; }
                 });
             }
 
@@ -423,6 +432,11 @@
     }
 
     // --- 4. UI 渲染 ---
+    function sortItemsByTime() {
+        if(itinerary[curIdx].items) itinerary[curIdx].items.sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
+        save(); render();
+    }
+
     function render() {
         document.getElementById('day-bar').innerHTML = itinerary.map((d, i) => `<button class="day-pill ${i===curIdx?'active':''}" onclick="curIdx=${i}; editTarget=null; render();">D${d.day}</button>`).join('');
         updateMapPath(); renderView();
@@ -430,9 +444,8 @@
         document.getElementById('fab-edit').style.display = (currentTab === 'itinerary') ? 'flex' : 'none';
     }
 
-    function toggleComplete(type, idx) {
-        if(type === 'flight') { itinerary[curIdx].flight.completed = !itinerary[curIdx].flight.completed; }
-        else { itinerary[curIdx].spots[idx].completed = !itinerary[curIdx].spots[idx].completed; }
+    function toggleComplete(idx) {
+        itinerary[curIdx].items[idx].completed = !itinerary[curIdx].items[idx].completed;
         save(); renderView();
     }
 
@@ -445,16 +458,18 @@
             const catOpts = i18n[config.lang]['cats'];
             
             if (currentTab === 'itinerary') {
-                let html = `<div style="margin-bottom:12px; font-weight:700; color:var(--primary); font-size:15px;">Day ${d.day} (${currentDateStr})：${d.summary}</div>`;
+                let html = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="font-weight:700; color:var(--primary); font-size:15px;">Day ${d.day} (${currentDateStr})：${d.summary}</div>
+                    ${isEditMode ? `<button class="btn-action" style="min-height:28px; padding:0 10px; font-size:11px; background:var(--tint);" onclick="sortItemsByTime()">${t('sortByTime')}</button>` : ''}
+                </div>`;
                 
                 if (isEditMode) {
                     html += `
                     <div class="card" style="flex-direction:column; background:var(--tint); border:1px solid var(--border); cursor:default;">
                         <div style="font-weight:800; margin-bottom:8px; color:var(--primary);">${t('quickExpense')}</div>
                         <div class="input-row" style="margin-bottom:8px;">
-                            <select id="ex-cat" class="ios-input" style="flex:1; padding:0 5px;">
-                                ${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}
-                            </select>
+                            <select id="ex-cat" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
                             <input id="ex-jpy" type="number" class="ios-input" placeholder="${config.baseCurr}" style="flex:2;">
                         </div>
                         <input id="ex-note" class="ios-input" placeholder="${t('expNote')}" style="margin-bottom:8px;">
@@ -462,96 +477,121 @@
                     </div>`;
                 }
                 
-                if (d.flight) {
-                    if (editTarget === 'flight' && isEditMode) {
-                        html += `
-                        <div class="inline-edit-box" style="margin-bottom:12px;">
-                            <div class="input-row"><input id="f-air" class="ios-input" value="${d.flight.airline}"><input id="f-no" class="ios-input" value="${d.flight.flightNo}"></div>
-                            <div class="input-row"><input id="f-lat" type="number" step="0.0001" class="ios-input" value="${d.flight.lat||''}"><input id="f-lng" type="number" step="0.0001" class="ios-input" value="${d.flight.lng||''}"></div>
-                            <div class="input-row"><input id="f-from" class="ios-input" value="${d.flight.from}"><input id="f-to" class="ios-input" value="${d.flight.to}"><input id="f-time" class="ios-input" value="${d.flight.time}"></div>
-                            <div class="input-row"><input id="f-seat" class="ios-input" value="${d.flight.seat}"><input id="f-cost" type="number" class="ios-input" value="${d.flight.cost}"></div>
-                            <button class="btn-action btn-save" onclick="saveFlight()">${t('save')}</button>
-                            <button class="btn-action btn-del" onclick="deleteFlight()">${t('delete')}</button>
-                        </div>`;
-                    } else {
-                        let isComp = d.flight.completed;
-                        let editBtnHtml = isEditMode ? `
-                            <button class="btn-action" style="margin-top:8px; height:28px; font-size:11px;" onclick="event.stopPropagation(); editTarget='flight'; renderView();">${t('edit')}</button>
-                            <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="margin-top:4px; height:28px; font-size:11px;" onclick="event.stopPropagation(); toggleComplete('flight')">${isComp ? t('markIncomplete') : t('markComplete')}</button>
-                        ` : '';
-
-                        html += `
-                        <div class="boarding-pass ${isComp?'completed':''}" onclick="focusSpot('${d.flight.lat}', '${d.flight.lng}')">
-                            <div class="bp-main">
-                                <div style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px;">${d.flight.airline}</div>
-                                <div class="bp-route"><div class="bp-code" style="font-size:22px;">${d.flight.from}</div><div style="flex:1; text-align:center; color:var(--primary);">FLIGHT</div><div class="bp-code" style="font-size:22px;">${d.flight.to}</div></div>
-                                <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
-                                    <div><b>${d.flight.flightNo}</b> | ${d.flight.time}</div>
-                                    <div style="color:var(--primary); font-weight:bold;">${d.flight.cost} ${config.targetCurr}</div>
-                                </div>
-                            </div>
-                            <div class="bp-stub">
-                                <span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${d.flight.seat}</div>
-                                ${editBtnHtml}
-                            </div>
-                        </div>`;
-                    }
-                } else if (isEditMode) {
-                    html += `<button class="btn-action" style="width:100%; border:1px dashed var(--border); margin-bottom:12px;" onclick="addFlightUI()">+ ${t('addFlight')}</button>`;
-                }
-
-                let sortedSpots = [...(d.spots || [])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
-                html += sortedSpots.map((s, sortIdx) => {
-                    let realIdx = d.spots.findIndex(os => os.id === s.id);
-                    let isComp = s.completed;
+                html += `<div id="items-container">`;
+                let displayIdx = 1; 
+                
+                html += (d.items || []).map((item, idx) => {
+                    let isComp = item.completed;
                     
-                    if (editTarget === realIdx && isEditMode) {
-                        return `
-                        <div class="card" style="padding:0; border:none; box-shadow:none;">
-                            <div class="inline-edit-box" onclick="event.stopPropagation()">
-                                <div class="input-row"><input id="edit-time-${realIdx}" class="ios-input" value="${s.time}" style="width:80px;" placeholder="${t('time')}"><input id="edit-name-${realIdx}" class="ios-input" value="${s.name}" style="flex:1;" placeholder="${t('name')}"></div>
-                                <div class="input-row">
-                                    <select id="edit-cat-${realIdx}" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}" ${c===s.cat?'selected':''}>${c}</option>`).join('')}</select>
-                                    <input id="edit-cost-${realIdx}" type="number" class="ios-input" value="${s.cost}" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
-                                </div>
-                                <div class="input-row"><input id="edit-lat-${realIdx}" type="number" step="0.0001" class="ios-input" value="${s.lat}" placeholder="${t('lat')}"><input id="edit-lng-${realIdx}" type="number" step="0.0001" class="ios-input" value="${s.lng}" placeholder="${t('lng')}"></div>
-                                <input id="edit-img-${realIdx}" class="ios-input" value="${s.img}" placeholder="${t('imgUrl')}" style="margin-bottom:8px;">
-                                <textarea id="edit-memo-${realIdx}" class="ios-input" style="height:60px;" placeholder="${t('memo')}">${s.memo}</textarea>
-                                <button class="btn-action btn-save" onclick="saveSpot(${realIdx})">${t('save')}</button>
-                                <button class="btn-action btn-del" onclick="deleteSpot(${realIdx})">${t('delete')}</button>
-                            </div>
-                        </div>`;
-                    } else {
-                        let thumbHtml = s.img.startsWith('http') ? `<img src="${s.img}" class="spot-thumb">` : `<div class="spot-thumb">${sortIdx+1}</div>`;
-                        let editBtnHtml = isEditMode ? `
-                            <div class="input-row" style="margin-top:8px;">
-                                <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="flex:1;" onclick="event.stopPropagation(); toggleComplete('spot', ${realIdx});">${isComp ? t('markIncomplete') : t('markComplete')}</button>
-                                <button class="btn-action" style="flex:1; border:1px solid var(--border);" onclick="event.stopPropagation(); editTarget=${realIdx}; renderView();">${t('edit')}</button>
-                            </div>
-                        ` : '';
-                        
-                        let mapBtnHtml = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
+                    if (item.type !== 'spot') {
+                        if (editTarget === idx && isEditMode) {
+                            return `
+                            <div class="inline-edit-box" style="margin-bottom:12px;">
+                                <div class="input-label">${t('ticketType')}</div>
+                                <select id="edit-type-${idx}" class="ios-input" style="margin-bottom:8px;">
+                                    <option value="flight" ${item.type==='flight'?'selected':''}>${t('flight')}</option>
+                                    <option value="train" ${item.type==='train'?'selected':''}>${t('train')}</option>
+                                    <option value="subway" ${item.type==='subway'?'selected':''}>${t('subway')}</option>
+                                </select>
+                                <div class="input-label">${t('flightAndNo')}</div>
+                                <div class="input-row"><input id="edit-name-${idx}" class="ios-input" value="${item.name}"><input id="edit-no-${idx}" class="ios-input" value="${item.no}"></div>
+                                <div class="input-label">${t('locLatLng')}</div>
+                                <div class="input-row"><input id="edit-lat-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lat||''}"><input id="edit-lng-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lng||''}"></div>
+                                <div class="input-label">${t('routeTime')}</div>
+                                <div class="input-row"><input id="edit-from-${idx}" class="ios-input" value="${item.from}"><input id="edit-to-${idx}" class="ios-input" value="${item.to}"><input id="edit-time-${idx}" class="ios-input" value="${item.time}"></div>
+                                <div class="input-label">${t('seatCost')} (${config.targetCurr})</div>
+                                <div class="input-row"><input id="edit-seat-${idx}" class="ios-input" value="${item.seat}"><input id="edit-cost-${idx}" type="number" class="ios-input" value="${item.cost}"></div>
+                                
+                                <button class="btn-action btn-save" onclick="saveItem(${idx}, 'ticket')">${t('save')}</button>
+                                <button class="btn-action btn-del" onclick="deleteItem(${idx})">${t('delete')}</button>
+                            </div>`;
+                        } else {
+                            let editBtnHtml = isEditMode ? `
+                                <button class="btn-action" style="margin-top:8px; height:28px; font-size:11px;" onclick="event.stopPropagation(); editTarget=${idx}; renderView();">${t('edit')}</button>
+                                <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="margin-top:4px; height:28px; font-size:11px;" onclick="event.stopPropagation(); toggleComplete(${idx})">${isComp ? t('markIncomplete') : t('markComplete')}</button>
+                            ` : '';
+                            
+                            let uiClass = 'bp-plane'; let uiTag = 'FLIGHT';
+                            if (item.type === 'train') { uiClass = 'bp-train'; uiTag = 'TRAIN'; }
+                            else if (item.type === 'subway') { uiClass = 'bp-subway'; uiTag = 'TRANSIT'; }
+                            
+                            let curDisplayIdx = item.lat ? displayIdx++ : '-';
 
-                        return `
-                        <div class="card ${isComp?'completed':''}" onclick="focusSpot('${s.lat}', '${s.lng}')">
-                            ${thumbHtml}
-                            <div class="spot-info">
-                                <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${sortIdx+1}.</span> ${s.time} ${s.name}</span></div>
-                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                    <div class="cat-tag">${s.cat || '...'}</div>
-                                    ${mapBtnHtml}
+                            return `
+                            <div class="boarding-pass ${uiClass} ${isComp?'completed':''}" onclick="focusSpot('${item.lat}', '${item.lng}')">
+                                <div class="bp-main">
+                                    <div class="bp-main-title" style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px; display:flex; justify-content:space-between;">
+                                        <span>${item.name}</span>
+                                        ${item.lat ? `<span style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">#${curDisplayIdx}</span>` : ''}
+                                    </div>
+                                    <div class="bp-route"><div class="bp-code" style="font-size:22px;">${item.from}</div><div style="flex:1; text-align:center; color:var(--secondary); font-size:12px; font-weight:bold; letter-spacing:1px;">${uiTag}</div><div class="bp-code" style="font-size:22px;">${item.to}</div></div>
+                                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
+                                        <div><b>${item.no}</b> | ${item.time}</div>
+                                        <div style="color:var(--primary); font-weight:bold;">${item.cost} ${config.targetCurr}</div>
+                                    </div>
                                 </div>
-                                <div class="spot-memo">${s.memo}</div>
-                                <div class="cost-row"><span>${s.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(s.cost*config.rate)} ${config.targetCurr})</span></div>
-                                ${editBtnHtml}
-                            </div>
-                        </div>`;
+                                <div class="bp-stub">
+                                    <span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${item.seat}</div>
+                                    ${editBtnHtml}
+                                </div>
+                                ${isEditMode ? `<div class="drag-handle" onclick="event.stopPropagation()">≡</div>` : ''}
+                            </div>`;
+                        }
+                    } else {
+                        if (editTarget === idx && isEditMode) {
+                            return `
+                            <div class="card" style="padding:0; border:none; box-shadow:none;">
+                                <div class="inline-edit-box" onclick="event.stopPropagation()">
+                                    <div class="input-row"><input id="edit-time-${idx}" class="ios-input" value="${item.time}" style="width:80px;" placeholder="${t('time')}"><input id="edit-name-${idx}" class="ios-input" value="${item.name}" style="flex:1;" placeholder="${t('name')}"></div>
+                                    <div class="input-row">
+                                        <select id="edit-cat-${idx}" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}" ${c===item.cat?'selected':''}>${c}</option>`).join('')}</select>
+                                        <input id="edit-cost-${idx}" type="number" class="ios-input" value="${item.cost}" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
+                                    </div>
+                                    <div class="input-row"><input id="edit-lat-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lat}" placeholder="${t('lat')}"><input id="edit-lng-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lng}" placeholder="${t('lng')}"></div>
+                                    <input id="edit-img-${idx}" class="ios-input" value="${item.img}" placeholder="${t('imgUrl')}" style="margin-bottom:8px;">
+                                    <textarea id="edit-memo-${idx}" class="ios-input" style="height:60px;" placeholder="${t('memo')}">${item.memo}</textarea>
+                                    <button class="btn-action btn-save" onclick="saveItem(${idx}, 'spot')">${t('save')}</button>
+                                    <button class="btn-action btn-del" onclick="deleteItem(${idx})">${t('delete')}</button>
+                                </div>
+                            </div>`;
+                        } else {
+                            let curDisplayIdx = item.lat ? displayIdx++ : '-';
+                            let thumbHtml = item.img.startsWith('http') ? `<img src="${item.img}" class="spot-thumb">` : `<div class="spot-thumb">${curDisplayIdx}</div>`;
+                            let editBtnHtml = isEditMode ? `
+                                <div class="input-row" style="margin-top:8px;">
+                                    <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="flex:1;" onclick="event.stopPropagation(); toggleComplete(${idx});">${isComp ? t('markIncomplete') : t('markComplete')}</button>
+                                    <button class="btn-action" style="flex:1; border:1px solid var(--border);" onclick="event.stopPropagation(); editTarget=${idx}; renderView();">${t('edit')}</button>
+                                </div>
+                            ` : '';
+                            
+                            let mapBtnHtml = `<a href="http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(item.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
+
+                            return `
+                            <div class="card ${isComp?'completed':''}" onclick="focusSpot('${item.lat}', '${item.lng}')">
+                                ${thumbHtml}
+                                <div class="spot-info">
+                                    <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${curDisplayIdx}.</span> ${item.time} ${item.name}</span></div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                        <div class="cat-tag">${item.cat || '...'}</div>
+                                        ${mapBtnHtml}
+                                    </div>
+                                    <div class="spot-memo">${item.memo}</div>
+                                    <div class="cost-row"><span>${item.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(item.cost*config.rate)} ${config.targetCurr})</span></div>
+                                    ${editBtnHtml}
+                                </div>
+                                ${isEditMode ? `<div class="drag-handle" onclick="event.stopPropagation()">≡</div>` : ''}
+                            </div>`;
+                        }
                     }
                 }).join('');
+                html += `</div>`;
 
                 if (isEditMode) {
                     html += `
-                    <div class="card" style="flex-direction:column; background:var(--bg); border:1px dashed var(--border); margin-top:20px; cursor:default;">
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        <button class="btn-action" style="flex:1; border:1px dashed var(--border);" onclick="addTicketUI()">+ ${t('addTicket')}</button>
+                    </div>
+                    <div class="card" style="flex-direction:column; background:var(--bg); border:1px dashed var(--border); margin-top:12px; cursor:default;">
                         <div style="font-weight:700; margin-bottom:8px;">+ ${t('addSpot')}</div>
                         <div class="input-row"><input id="new-time" class="ios-input" placeholder="${t('time')}" style="width:80px;"><input id="new-name" class="ios-input" placeholder="${t('name')}" style="flex:1;"></div>
                         <div class="input-row">
@@ -566,6 +606,23 @@
                 
                 port.innerHTML = html;
 
+                setTimeout(() => {
+                    if(isEditMode && typeof Sortable !== 'undefined') {
+                        let container = document.getElementById('items-container');
+                        if(container) {
+                            Sortable.create(container, {
+                                handle: '.drag-handle', animation: 150, ghostClass: 'sortable-ghost',
+                                onEnd: function(evt) {
+                                    let arr = itinerary[curIdx].items;
+                                    let item = arr.splice(evt.oldIndex, 1)[0];
+                                    arr.splice(evt.newIndex, 0, item);
+                                    save(); updateMapPath(); renderView();
+                                }
+                            });
+                        }
+                    }
+                }, 50);
+
             } else if (currentTab === 'overview') {
                 renderOverview(port);
             }
@@ -575,25 +632,50 @@
         }
     }
 
-    // --- CRUD ---
-    function addFlightUI() { itinerary[curIdx].flight = { airline: "AIRLINE", flightNo: "000", from: "AAA", to: "BBB", time: "12:00", seat: "1A", cost: 0, lat: 0, lng: 0, completed: false }; editTarget = 'flight'; save(); render(); }
-    function saveFlight() {
-        const d = itinerary[curIdx]; d.flight.airline = document.getElementById('f-air').value; d.flight.flightNo = document.getElementById('f-no').value; d.flight.from = document.getElementById('f-from').value; d.flight.to = document.getElementById('f-to').value; d.flight.time = document.getElementById('f-time').value; d.flight.seat = document.getElementById('f-seat').value; d.flight.cost = parseInt(document.getElementById('f-cost').value) || 0; d.flight.lat = parseFloat(document.getElementById('f-lat').value) || 0; d.flight.lng = parseFloat(document.getElementById('f-lng').value) || 0; editTarget = null; save(); render();
+    // --- CRUD Unified ---
+    function saveItem(idx, type) {
+        const item = itinerary[curIdx].items[idx]; 
+        item.type = type === 'spot' ? 'spot' : document.getElementById(`edit-type-${idx}`).value;
+        item.time = document.getElementById(`edit-time-${idx}`).value;
+        
+        if (type === 'spot') {
+            item.name = document.getElementById(`edit-name-${idx}`).value;
+            item.cat = document.getElementById(`edit-cat-${idx}`).value;
+            item.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0;
+            item.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0;
+            item.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0;
+            item.img = document.getElementById(`edit-img-${idx}`).value;
+            item.memo = document.getElementById(`edit-memo-${idx}`).value;
+        } else {
+            item.name = document.getElementById(`edit-name-${idx}`).value;
+            item.no = document.getElementById(`edit-no-${idx}`).value;
+            item.from = document.getElementById(`edit-from-${idx}`).value;
+            item.to = document.getElementById(`edit-to-${idx}`).value;
+            item.seat = document.getElementById(`edit-seat-${idx}`).value;
+            item.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0;
+            item.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0;
+            item.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0;
+        }
+        editTarget = null; save(); render();
     }
-    function deleteFlight() { itinerary[curIdx].flight = null; editTarget=null; save(); render(); }
-    function saveSpot(idx) {
-        const s = itinerary[curIdx].spots[idx]; s.time = document.getElementById(`edit-time-${idx}`).value; s.name = document.getElementById(`edit-name-${idx}`).value; s.cat = document.getElementById(`edit-cat-${idx}`).value; s.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0; s.img = document.getElementById(`edit-img-${idx}`).value; s.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0; s.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0; s.memo = document.getElementById(`edit-memo-${idx}`).value; editTarget = null; save(); render();
+
+    function addTicketUI() { 
+        itinerary[curIdx].items.push({ id: "t_" + Date.now(), type: "flight", name: "COMPANY", no: "000", from: "AAA", to: "BBB", time: "12:00", seat: "1A", cost: 0, lat: 0, lng: 0, completed: false });
+        editTarget = itinerary[curIdx].items.length - 1; save(); render(); 
     }
+
     function addSpot() {
         const name = document.getElementById('new-name').value; if(!name) return;
-        itinerary[curIdx].spots.push({ id: Date.now(), name, time: document.getElementById('new-time').value || "12:00", cat: document.getElementById('new-cat').value, cost: parseInt(document.getElementById('new-cost').value) || 0, img: "https://placehold.co/150", lat: parseFloat(document.getElementById('new-lat').value) || 0, lng: parseFloat(document.getElementById('new-lng').value) || 0, memo: document.getElementById('new-memo').value, completed: false });
+        itinerary[curIdx].items.push({ id: Date.now(), type: 'spot', name, time: document.getElementById('new-time').value || "12:00", cat: document.getElementById('new-cat').value, cost: parseInt(document.getElementById('new-cost').value) || 0, img: "https://placehold.co/150", lat: parseFloat(document.getElementById('new-lat').value) || 0, lng: parseFloat(document.getElementById('new-lng').value) || 0, memo: document.getElementById('new-memo').value, completed: false });
         save(); render();
     }
+
+    function deleteItem(idx) { itinerary[curIdx].items.splice(idx,1); editTarget=null; save(); render(); }
+    
     function addEx() {
         const jpy = parseInt(document.getElementById('ex-jpy').value), note = document.getElementById('ex-note').value, cat = document.getElementById('ex-cat').value;
         if(!jpy) return; extras.push({ day: itinerary[curIdx].day, jpy, note: note || cat, category: cat }); save(); renderView();
     }
-    function deleteSpot(idx) { itinerary[curIdx].spots.splice(idx,1); editTarget=null; save(); render(); }
 
     // --- 5. 總覽與圖表 ---
     function renderOverview(port) {
@@ -611,58 +693,64 @@
         let allSpotsHtml = itinerary.map(d => {
             let dExtra = extras.filter(e => e.day === d.day);
             let dateStr = window.getDayDate(d.day);
-            let sorted = [...(d.spots||[])].sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
             
             let dayExpHtml = ''; let dayHasExpense = false;
             let cardHtml = `<div style="margin-top:20px; font-weight:800; font-size:16px; color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:12px;">Day ${d.day} (${dateStr}) - ${d.summary}</div>`;
 
-            if(d.flight) {
-                totalItems++; if(d.flight.completed) completedItems++;
-                expDataObj[catOpts[11]] = (expDataObj[catOpts[11]]||0) + d.flight.cost; 
-                dayExpHtml += `<tr><td>[Flight] ${d.flight.flightNo}</td><td style="text-align:right;">-</td><td style="text-align:right;">${d.flight.cost}</td></tr>`;
-                dayHasExpense = true;
+            let itemIdx = 1;
+            (d.items || []).forEach(item => {
+                totalItems++; if(item.completed) completedItems++;
                 
-                cardHtml += `
-                    <div class="boarding-pass" style="cursor:default;">
-                        <div class="bp-main">
-                            <div style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px;">${d.flight.airline}</div>
-                            <div class="bp-route"><div class="bp-code" style="font-size:22px;">${d.flight.from}</div><div style="flex:1; text-align:center; color:var(--primary);">FLIGHT</div><div class="bp-code" style="font-size:22px;">${d.flight.to}</div></div>
-                            <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
-                                <div><b>${d.flight.flightNo}</b> | ${d.flight.time}</div>
-                                <div style="color:var(--primary); font-weight:bold;">${d.flight.cost} ${config.targetCurr}</div>
-                            </div>
-                        </div>
-                        <div class="bp-stub"><span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${d.flight.seat}</div></div>
-                    </div>`;
-            }
-
-            cardHtml += sorted.map((s, sortIdx) => {
-                totalItems++; if(s.completed) completedItems++;
-                spotBase += s.cost;
-                if(expDataObj[s.cat] !== undefined) expDataObj[s.cat] += Math.round(s.cost * config.rate);
-                if(catCountObj[s.cat] !== undefined) catCountObj[s.cat] += 1;
-                
-                if(s.cost > 0) {
-                    dayExpHtml += `<tr><td>[${s.cat}] ${s.name}</td><td style="text-align:right;">${s.cost}</td><td style="text-align:right;">${Math.round(s.cost*config.rate)}</td></tr>`;
+                if (item.type !== 'spot') {
+                    let tCat = item.type === 'flight' ? catOpts[11] : (item.type === 'train' ? catOpts[1] : catOpts[5]); 
+                    expDataObj[tCat] = (expDataObj[tCat]||0) + Math.round(item.cost / config.rate); 
+                    
+                    dayExpHtml += `<tr><td>[${tCat}] ${item.no}</td><td style="text-align:right;">-</td><td style="text-align:right;">${item.cost}</td></tr>`;
                     dayHasExpense = true;
-                }
-                let thumbHtml = s.img.startsWith('http') ? `<img src="${s.img}" class="spot-thumb">` : `<div class="spot-thumb">${sortIdx+1}</div>`;
-                let mapBtnHtml = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
+                    
+                    let uiTag = item.type === 'train' ? 'TRAIN' : (item.type === 'subway' ? 'TRANSIT' : 'FLIGHT');
+                    let uiClass = item.type === 'train' ? 'bp-train' : (item.type === 'subway' ? 'bp-subway' : 'bp-plane');
+                    let curDisplayIdx = item.lat ? itemIdx++ : '-';
 
-                return `
-                <div class="card" style="cursor:default;">
-                    ${thumbHtml}
-                    <div class="spot-info">
-                        <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${sortIdx+1}.</span> ${s.time} ${s.name}</span></div>
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                            <div class="cat-tag">${s.cat || '...'}</div>
-                            ${mapBtnHtml}
+                    cardHtml += `
+                        <div class="boarding-pass ${uiClass}" style="cursor:default;">
+                            <div class="bp-main">
+                                <div class="bp-main-title" style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px; display:flex; justify-content:space-between;">
+                                    <span>${item.name}</span>
+                                    ${item.lat ? `<span style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">#${curDisplayIdx}</span>` : ''}
+                                </div>
+                                <div class="bp-route"><div class="bp-code" style="font-size:22px;">${item.from}</div><div style="flex:1; text-align:center; color:var(--secondary); font-size:12px; font-weight:bold; letter-spacing:1px;">${uiTag}</div><div class="bp-code" style="font-size:22px;">${item.to}</div></div>
+                                <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
+                                    <div><b>${item.no}</b> | ${item.time}</div>
+                                    <div style="color:var(--primary); font-weight:bold;">${item.cost} ${config.targetCurr}</div>
+                                </div>
+                            </div>
+                            <div class="bp-stub"><span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${item.seat}</div></div>
+                        </div>`;
+                } else {
+                    spotBase += item.cost;
+                    if(expDataObj[item.cat] !== undefined) expDataObj[item.cat] += item.cost;
+                    if(catCountObj[item.cat] !== undefined) catCountObj[item.cat] += 1;
+                    
+                    if(item.cost > 0) {
+                        dayExpHtml += `<tr><td>[${item.cat}] ${item.name}</td><td style="text-align:right;">${item.cost}</td><td style="text-align:right;">${Math.round(item.cost*config.rate)}</td></tr>`;
+                        dayHasExpense = true;
+                    }
+                    
+                    let curDisplayIdx = item.lat ? itemIdx++ : '-';
+                    let thumbHtml = item.img.startsWith('http') ? `<img src="${item.img}" class="spot-thumb">` : `<div class="spot-thumb">${curDisplayIdx}</div>`;
+                    cardHtml += `
+                    <div class="card" style="cursor:default;">
+                        ${thumbHtml}
+                        <div class="spot-info">
+                            <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${curDisplayIdx}.</span> ${item.time} ${item.name}</span></div>
+                            <div class="cat-tag" style="display:inline-block; margin-bottom:6px;">${item.cat || '...'}</div>
+                            <div class="spot-memo">${item.memo}</div>
+                            <div class="cost-row"><span>${item.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(item.cost*config.rate)} ${config.targetCurr})</span></div>
                         </div>
-                        <div class="spot-memo">${s.memo}</div>
-                        <div class="cost-row"><span>${s.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(s.cost*config.rate)} ${config.targetCurr})</span></div>
-                    </div>
-                </div>`;
-            }).join('');
+                    </div>`;
+                }
+            });
 
             dExtra.forEach(e => {
                 dayExpHtml += `<tr style="color:var(--secondary);"><td>[${e.category}] ${e.note}</td><td style="text-align:right;">${e.jpy}</td><td style="text-align:right;">${Math.round(e.jpy*config.rate)}</td></tr>`;
@@ -672,16 +760,13 @@
                     <div style="width:40px; height:40px; border-radius:12px; background:var(--tint); display:flex; align-items:center; justify-content:center; color:var(--primary); font-weight:bold; font-size:20px; flex-shrink:0;">$</div>
                     <div class="spot-info">
                         <div class="spot-title"><span style="color:var(--text);">${e.note}</span></div>
-                        <div class="cat-tag">${e.category}</div>
-                        <div class="cost-row" style="color:var(--red);"><span>${e.jpy} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(e.jpy*config.rate)} ${config.targetCurr})</span></div>
+                        <div class="cat-tag" style="display:inline-block;">${e.category}</div>
+                        <div class="cost-row" style="color:var(--red); margin-top:6px;"><span>${e.jpy} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(e.jpy*config.rate)} ${config.targetCurr})</span></div>
                     </div>
                 </div>`;
             });
 
-            if (dayHasExpense) {
-                expenseTableHtml += `<tr class="expense-day-row"><td colspan="3">Day ${d.day}</td></tr>` + dayExpHtml;
-            }
-
+            if (dayHasExpense) { expenseTableHtml += `<tr class="expense-day-row"><td colspan="3">Day ${d.day}</td></tr>` + dayExpHtml; }
             return cardHtml;
         }).join('');
         
@@ -690,16 +775,15 @@
         let extraBase = 0;
         extras.forEach(e => {
             extraBase += e.jpy;
-            let valTarget = Math.round(e.jpy * config.rate);
-            if(expDataObj[e.category] !== undefined) expDataObj[e.category] += valTarget;
+            if(expDataObj[e.category] !== undefined) expDataObj[e.category] += e.jpy;
         });
 
-        let flightTarget = itinerary.reduce((sum, d) => sum + (d.flight?d.flight.cost:0), 0);
+        let ticketTarget = itinerary.reduce((sum, d) => sum + (d.items||[]).reduce((ts, item)=> item.type!=='spot' ? ts+item.cost : ts, 0), 0);
         let totalBase = spotBase + extraBase;
-        let totalTarget = Math.round(totalBase * config.rate) + flightTarget;
+        let totalTarget = Math.round(totalBase * config.rate) + ticketTarget;
 
         let expLabels = [], expData = [];
-        for (const [k, v] of Object.entries(expDataObj)) { if (v > 0) { expLabels.push(k); expData.push(v); } }
+        for (const [k, v] of Object.entries(expDataObj)) { if (v > 0) { expLabels.push(k); expData.push(Math.round(v * config.rate)); } }
 
         let catLabels = [], catData = [];
         for (const [k, v] of Object.entries(catCountObj)) { if (v > 0) { catLabels.push(k); catData.push(v); } }
@@ -857,7 +941,7 @@
         document.getElementById('settings-days-list').innerHTML = html;
     }
 
-    function addDayInSettings() { tempItinerary.push({ day: tempItinerary.length + 1, summary: "New Day", steps: 0, spots: [] }); renderSettingsDaysList(); }
+    function addDayInSettings() { tempItinerary.push({ day: tempItinerary.length + 1, summary: "New Day", steps: 0, items: [] }); renderSettingsDaysList(); }
     function deleteDayInSettings(idx) { if(confirm(t('delete') + "?")) { tempItinerary.splice(idx, 1); tempItinerary.forEach((d, i) => d.day = i + 1); renderSettingsDaysList(); } }
 
     function openSettings() {
@@ -873,11 +957,11 @@
         config.baseCurr = document.getElementById('cfg-base').value || "JPY"; config.targetCurr = document.getElementById('cfg-target').value || "TWD";
         config.rate = parseFloat(document.getElementById('cfg-rate').value) || 0.21;
         itinerary = JSON.parse(JSON.stringify(tempItinerary)); curIdx = 0; 
-        localStorage.setItem('v83_config', JSON.stringify(config));
+        localStorage.setItem('v88_config', JSON.stringify(config));
         applyTranslation(true); applyTheme(true); save(); closeSettings(); render();
     }
 
-    function save() { localStorage.setItem('v83_data', JSON.stringify(itinerary)); localStorage.setItem('v83_extras', JSON.stringify(extras)); }
+    function save() { localStorage.setItem('v88_data', JSON.stringify(itinerary)); localStorage.setItem('v88_extras', JSON.stringify(extras)); }
     function switchTab(t) { currentTab = t; document.querySelectorAll('.tab-item').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); editTarget = null; isEditMode = false; render(); }
     function toggleExpand() { isExpanded = !isExpanded; document.getElementById('main-drawer').style.height = isExpanded ? '92%':'60%'; }
 </script>
