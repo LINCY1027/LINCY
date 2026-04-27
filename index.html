@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            /* 調整為 Adobe 風格的鮮豔青藍色 */
+            var(--accent): #00e5ff;
             --accent: #00e5ff;
             --accent-glow: rgba(0, 229, 255, 0.5);
             --bg-dark: #050505;
@@ -32,7 +32,7 @@
         @keyframes springPopIn { 0% { opacity: 0; transform: translateY(40px) scale(0.9); } 60% { opacity: 1; transform: translateY(-5px) scale(1.02); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* === 認證彈窗 (Login/Register) - Adobe 鮮豔風格 === */
+        /* === 認證彈窗 (Login/Register) === */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(20px);
@@ -44,7 +44,6 @@
             padding: 40px; border-radius: 24px; text-align: center; width: 100%; max-width: 400px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.8); position: relative; overflow: hidden; 
         }
-        /* Adobe 風格：移除灰階，使用色彩鮮豔的創意流體圖片 */
         .modal-clear-img {
             width: 100%; height: 160px; background-color: #1a1a1a;
             background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80');
@@ -55,12 +54,22 @@
         .auth-tab { flex: 1; background: transparent; border: 1px solid var(--card-border); color: var(--text-sub); padding: 10px; border-radius: 8px; cursor: pointer; transition: 0.3s; font-weight: 500; }
         .auth-tab.active { background: rgba(255,255,255,0.1); color: white; border-color: var(--accent); }
 
+        /* 修改：語言切換按鈕移至左上角 */
         .lang-toggle-modal {
             background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-border); color: white;
             padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
-            position: absolute; top: 15px; right: 15px; transition: 0.3s; backdrop-filter: blur(5px);
+            position: absolute; top: 15px; left: 15px; transition: 0.3s; backdrop-filter: blur(5px);
         }
         .lang-toggle-modal:hover { background: rgba(255,255,255,0.2); }
+
+        /* 新增：右上角退出按鈕 (X) */
+        .close-modal-btn {
+            background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-border); color: var(--text-sub);
+            width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 1.2rem;
+            position: absolute; top: 15px; right: 15px; transition: 0.3s; backdrop-filter: blur(5px);
+            display: flex; justify-content: center; align-items: center; line-height: 1;
+        }
+        .close-modal-btn:hover { background: rgba(255, 71, 87, 0.8); border-color: #ff4757; color: white; }
 
         /* === 共通 UI === */
         .glass-card {
@@ -94,10 +103,9 @@
         .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent-glow); }
         .btn:hover::after { left: 150%; }
         .btn:active { transform: translateZ(10px) scale(0.96); }
+        
         .btn-outline { background: transparent; border: 1px solid var(--card-border); color: var(--text-main); margin-top: 10px; }
         .btn-outline::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); }
-
-        /* 訪客登入按鈕 */
         .btn-login-shop { position: absolute; top: 25px; left: 30px; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border); color: white; padding: 8px 15px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; transition: 0.3s; }
         .btn-login-shop:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -106,25 +114,40 @@
         /* === 購物系統排版 === */
         #shop-view .bento-container { display: grid; grid-template-columns: 1.2fr 1fr 1fr; grid-template-rows: auto auto; gap: 20px; max-width: 1200px; width: 100vw; position: relative;}
         
-        /* Adobe 風格色彩斑斕的背景 */
-        .hero-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #111; background-image: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1200&q=80'); background-size: cover; background-position: center; opacity: 0.5; z-index: -1; transform: scale(1.1) translateZ(-50px); mix-blend-mode: overlay;}
-        
         .card-hero { grid-column: span 1; grid-row: span 2; position: relative; overflow: hidden; }
         .card-config { grid-column: span 1; grid-row: span 2; }
         .card-cart { grid-column: span 1; grid-row: span 1; }
         .card-buyer { grid-column: span 1; grid-row: span 1; }
+        
+        .hero-bg { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: #111; 
+            background-image: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1200&q=80'); 
+            background-size: cover; background-position: center; 
+            opacity: 0.4; mix-blend-mode: luminosity; z-index: -1; 
+            transform: scale(1.1) translateZ(-50px); 
+            transition: opacity 0.5s ease, mix-blend-mode 0.5s ease, transform 0.5s ease;
+        }
+        .glass-card.card-hero:hover .hero-bg {
+            opacity: 1; mix-blend-mode: normal;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--card-border); border-radius: 12px; padding: 20px;
+            text-align: center; color: var(--text-sub); cursor: pointer;
+            margin-bottom: 20px; font-size: 0.85rem; transition: 0.3s; transform: translateZ(15px);
+        }
+        .upload-area:hover { border-color: var(--accent); color: var(--accent); background: rgba(0, 229, 255, 0.05); }
         .barcode { font-family: 'Libre Barcode 39', cursive; font-size: 45px; line-height: 1; color: var(--accent); margin: 10px 0; font-weight: normal; }
 
         /* === 戰情室排版 (Admin View) === */
         #admin-view { width: 100%; max-width: 1200px; animation: fadeIn 0.5s ease; }
         #admin-view .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
         
-        /* 後台導覽列 */
         .admin-nav { display: flex; gap: 15px; }
         .admin-nav button { width: auto; padding: 10px 20px; font-size: 0.85rem; margin: 0; transform: none; }
         .admin-nav button.active { background: var(--accent); color: #000; border-color: var(--accent); }
         
-        /* 後台資料表樣式 (Glass Table) */
         .table-container { width: 100%; overflow-x: auto; max-height: 60vh; margin-top: 10px;}
         table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
         th { padding: 15px; border-bottom: 1px solid var(--accent); color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; position: sticky; top: 0; background: rgba(10,10,15,0.9); z-index: 10;}
@@ -134,11 +157,9 @@
         .badge-pending { background: rgba(255, 171, 0, 0.2); color: #ffab00; border: 1px solid #ffab00;}
         .badge-done { background: rgba(46, 213, 115, 0.2); color: #2ed573; border: 1px solid #2ed573;}
 
-        /* 面板區塊顯示控制 */
         .admin-panel { display: none; }
         .admin-panel.active { display: block; animation: fadeIn 0.5s ease; }
 
-        /* Dashboard 網格 */
         .dashboard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
         .metric-card { grid-column: span 1; padding: 20px; text-align: center; transform: none !important; }
         .metric-title { font-size: 0.8rem; color: var(--text-sub); text-transform: uppercase; margin-bottom: 10px; }
@@ -162,6 +183,9 @@
     <div id="auth-modal" class="modal-overlay">
         <div class="modal-content">
             <button class="lang-toggle-modal" onclick="toggleLang()" data-i18n="btnLang">EN / 中</button>
+            
+            <button class="close-modal-btn" onclick="closeAuthModal()">×</button>
+            
             <div class="modal-clear-img"></div>
             
             <div class="auth-tabs">
@@ -201,6 +225,11 @@
 
             <div class="glass-card card-config">
                 <h2 data-i18n="configTitle">Parameters</h2>
+                
+                <div class="upload-area" onclick="alert(currentLang === 'en' ? 'Simulate: File Picker Opened' : '模擬：開啟檔案選擇器')">
+                    <span data-i18n="uploadText">Drop file here or click to upload</span>
+                </div>
+
                 <div class="form-row">
                     <label data-i18n="labelSize">SIZE</label>
                     <select id="size" onchange="calcPreview()">
@@ -316,8 +345,7 @@
                                 <th data-i18n="colSpent">Total Spent</th>
                             </tr>
                         </thead>
-                        <tbody id="member-table-body">
-                            </tbody>
+                        <tbody id="member-table-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -337,8 +365,7 @@
                                 <th data-i18n="colStatus">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="order-table-body">
-                            </tbody>
+                        <tbody id="order-table-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -348,29 +375,27 @@
 
 <script>
     // ==========================================
-    // 1. 多國語系引擎 (擴充翻譯字典)
+    // 1. 字典引擎
     // ==========================================
     let currentLang = 'en'; 
     const dict = {
         en: {
             btnLang: "EN / 中", tabLogin: "LOGIN", tabRegister: "REGISTER", phAccount: "Account ID", phPassword: "Password", phName: "Full Name", phPhone: "Phone Number", phEmail: "Email Address",
             btnLogin: "SIGN IN", btnGuest: "Guest Access", btnRegister: "CREATE ACCOUNT", btnReLogin: "MEMBER LOGIN",
-            configTitle: "Parameters", labelSize: "SIZE", labelPaper: "PAPER", labelCopies: "COPIES", estCost: "EST. COST", btnAdd: "Add to Queue",
+            configTitle: "Parameters", uploadText: "Drop file here or click to upload", labelSize: "SIZE", labelPaper: "PAPER", labelCopies: "COPIES", estCost: "EST. COST", btnAdd: "Add to Queue",
             cartTitle: "Print Queue", total: "TOTAL", buyerTitle: "Client Info", btnCheckout: "Submit Order", orderConfirmed: "Order Confirmed", emptyCart: "Queue is empty.",
             adminTitle: "Dashboard Console", btnLogout: "LOGOUT", navDashboard: "Dashboard", navMembers: "Members", navOrders: "Orders",
-            metRevenue: "Gross Revenue", metCost: "Est. Cost", metProfit: "Net Profit", metOfficer: "Duty Officer", 
-            chartSales: "Historical Sales Volume", chartReferrer: "Acquisition & Demographics",
+            metRevenue: "Gross Revenue", metCost: "Est. Cost", metProfit: "Net Profit", metOfficer: "Duty Officer", chartSales: "Historical Sales Volume", chartReferrer: "Acquisition & Demographics",
             panelMembersTitle: "Member Directory", colAge: "Age", colGender: "Gender", colSource: "Source", colOrders: "Orders", colSpent: "Total Spent",
             panelOrdersTitle: "Live Order Queue", colDate: "Date", colItems: "Items", colAmount: "Amount", colStatus: "Status", statPending: "Pending", statDone: "Completed"
         },
         zh: {
             btnLang: "EN / 中", tabLogin: "登入", tabRegister: "註冊", phAccount: "帳號", phPassword: "密碼", phName: "真實姓名", phPhone: "聯絡電話", phEmail: "電子信箱",
             btnLogin: "登入系統", btnGuest: "以訪客身分繼續", btnRegister: "建立帳戶", btnReLogin: "會員登入",
-            configTitle: "規格設定", labelSize: "尺寸", labelPaper: "紙材", labelCopies: "數量", estCost: "單項預估", btnAdd: "加入佇列",
+            configTitle: "規格設定", uploadText: "拖曳檔案至此，或點擊上傳", labelSize: "尺寸", labelPaper: "紙材", labelCopies: "數量", estCost: "單項預估", btnAdd: "加入佇列",
             cartTitle: "輸出佇列", total: "總計金額", buyerTitle: "聯絡資訊", btnCheckout: "確認並結帳", orderConfirmed: "訂單已成立", emptyCart: "佇列目前為空。",
             adminTitle: "戰情管理中心", btnLogout: "登出", navDashboard: "戰情看板", navMembers: "會員列表", navOrders: "接單管理",
-            metRevenue: "總營業額", metCost: "預估成本", metProfit: "淨利潤", metOfficer: "值班人員", 
-            chartSales: "商品歷史售出量", chartReferrer: "客戶來源與年齡層",
+            metRevenue: "總營業額", metCost: "預估成本", metProfit: "淨利潤", metOfficer: "值班人員", chartSales: "商品歷史售出量", chartReferrer: "客戶來源與年齡層",
             panelMembersTitle: "會員資料總表", colAge: "年齡", colGender: "性別", colSource: "來源", colOrders: "下單次數", colSpent: "累積消費",
             panelOrdersTitle: "即時接單看板", colDate: "日期", colItems: "項目", colAmount: "金額", colStatus: "狀態", statPending: "製作中", statDone: "已完成"
         }
@@ -381,124 +406,81 @@
         document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = dict[currentLang][el.getAttribute('data-i18n')]; });
         document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = dict[currentLang][el.getAttribute('data-i18n-ph')]; });
         renderCart(); 
-        if(document.getElementById('admin-view').classList.contains('hidden') === false) {
-            renderMockTables(); // 更新表格翻譯
-        }
+        if(document.getElementById('admin-view').classList.contains('hidden') === false) renderMockTables(); 
     }
 
     // ==========================================
-    // 2. 視圖與驗證邏輯
+    // 2. 視圖與登入 (新增 closeAuthModal 的按鈕邏輯)
     // ==========================================
     function switchTab(tab) {
         document.getElementById('tab-login').classList.remove('active'); document.getElementById('tab-register').classList.remove('active');
         document.getElementById('form-login').classList.add('hidden'); document.getElementById('form-register').classList.add('hidden');
         document.getElementById(`tab-${tab}`).classList.add('active'); document.getElementById(`form-${tab}`).classList.remove('hidden');
     }
-
-    function openAuthModal() {
-        document.getElementById('shop-view').classList.add('hidden');
-        document.getElementById('auth-modal').style.display = 'flex';
-        setTimeout(() => document.getElementById('auth-modal').style.opacity = '1', 10);
-    }
-
-    function closeAuthModal() {
-        document.getElementById('auth-modal').style.opacity = '0';
-        setTimeout(() => { document.getElementById('auth-modal').style.display = 'none'; document.getElementById('shop-view').classList.remove('hidden'); }, 500);
-    }
-
+    function openAuthModal() { document.getElementById('shop-view').classList.add('hidden'); document.getElementById('auth-modal').style.display = 'flex'; setTimeout(() => document.getElementById('auth-modal').style.opacity = '1', 10); }
+    function closeAuthModal() { document.getElementById('auth-modal').style.opacity = '0'; setTimeout(() => { document.getElementById('auth-modal').style.display = 'none'; document.getElementById('shop-view').classList.remove('hidden'); }, 500); }
     function handleRegister() {
         const name = document.getElementById('reg-name').value; const phone = document.getElementById('reg-phone').value;
         if(!name || !phone) { alert(currentLang === 'en' ? "Please fill all fields" : "請填寫完整資訊"); return; }
         alert(currentLang === 'en' ? "Registration Successful!" : "會員註冊成功！");
-        document.getElementById('buyer-name').value = name; document.getElementById('buyer-phone').value = phone;
-        closeAuthModal();
+        document.getElementById('buyer-name').value = name; document.getElementById('buyer-phone').value = phone; closeAuthModal();
     }
-
     function handleLogin() {
         const acc = document.getElementById('login-acc').value; const pwd = document.getElementById('login-pwd').value;
-        if (acc === 'admin' && pwd === '1234') {
-            document.getElementById('auth-modal').style.display = 'none'; document.getElementById('admin-view').classList.remove('hidden');
-            initAdminDashboard(); 
-        } else {
-            alert(currentLang === 'en' ? "Invalid credentials. Try Guest Access." : "帳密錯誤，請檢查或使用訪客登入。");
-        }
+        if (acc === 'admin' && pwd === '1234') { document.getElementById('auth-modal').style.display = 'none'; document.getElementById('admin-view').classList.remove('hidden'); initAdminDashboard(); } 
+        else { alert(currentLang === 'en' ? "Invalid credentials. Try Guest Access." : "帳密錯誤，請檢查或使用訪客登入。"); }
     }
-
     function animateValue(obj, start, end, duration) {
         let startTimestamp = null;
         const step = (timestamp) => {
-            if (!startTimestamp) startTimestamp = timestamp;
-            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            if (!startTimestamp) startTimestamp = timestamp; const progress = Math.min((timestamp - startTimestamp) / duration, 1);
             obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString();
             if (progress < 1) window.requestAnimationFrame(step);
-        };
-        window.requestAnimationFrame(step);
+        }; window.requestAnimationFrame(step);
     }
 
     // ==========================================
-    // 3. 戰情室控制 (Tab 切換與模擬引擎)
+    // 3. 戰情室 (Admin Tab & Chart.js)
     // ==========================================
     function switchAdminTab(panelId) {
         document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-        document.getElementById(`btn-nav-${panelId}`).classList.add('active');
-        document.getElementById(`panel-${panelId}`).classList.add('active');
+        document.getElementById(`btn-nav-${panelId}`).classList.add('active'); document.getElementById(`panel-${panelId}`).classList.add('active');
     }
 
-    let mockMembers = [];
-    let mockOrdersData = [];
-
+    let mockMembers = []; let mockOrdersData = [];
     function initAdminDashboard() {
         Chart.defaults.color = 'rgba(255, 255, 255, 0.7)'; Chart.defaults.font.family = "'Montserrat', 'Noto Sans TC', sans-serif";
 
-        // 產生 50 筆模擬會員資料
         mockMembers = Array.from({length: 50}, (_, i) => ({
-            id: `USR-${String(i+1).padStart(3,'0')}`,
-            age: Math.floor(Math.random() * 42) + 18,
-            gender: Math.random() > 0.4 ? 'Male' : 'Female',
-            source: ['Social Media', 'Word of Mouth', 'Organic Search', 'Ads'][Math.floor(Math.random() * 4)],
-            orders: Math.floor(Math.random() * 15) + 1,
-            spent: Math.floor(Math.random() * 45000) + 5000
+            id: `USR-${String(i+1).padStart(3,'0')}`, age: Math.floor(Math.random() * 42) + 18,
+            gender: Math.random() > 0.4 ? 'Male' : 'Female', source: ['Social Media', 'Word of Mouth', 'Organic Search', 'Ads'][Math.floor(Math.random() * 4)],
+            orders: Math.floor(Math.random() * 15) + 1, spent: Math.floor(Math.random() * 45000) + 5000
         }));
-
-        // 產生模擬訂單資料 (接單看板使用)
         mockOrdersData = Array.from({length: 15}, (_, i) => ({
             oId: `ORD-${Math.random().toString(36).toUpperCase().substring(2, 6)}-${String(i+1).padStart(3,'0')}`,
-            date: `2024-04-${String(Math.floor(Math.random()*28)+1).padStart(2,'0')}`,
-            items: `${['A0','A1','A2','A3','A4'][Math.floor(Math.random()*5)]} Print (*${Math.floor(Math.random()*5)+1})`,
-            amount: Math.floor(Math.random()*5000)+500,
-            status: Math.random() > 0.3 ? 'done' : 'pending'
+            date: `2024-04-${String(Math.floor(Math.random()*28)+1).padStart(2,'0')}`, items: `${['A0','A1','A2','A3','A4'][Math.floor(Math.random()*5)]} Print (*${Math.floor(Math.random()*5)+1})`,
+            amount: Math.floor(Math.random()*5000)+500, status: Math.random() > 0.3 ? 'done' : 'pending'
         }));
 
-        const totalRevenue = mockMembers.reduce((sum, m) => sum + m.spent, 0);
-        const totalCost = totalRevenue * 0.58; const netProfit = totalRevenue - totalCost;
+        const totalRevenue = mockMembers.reduce((sum, m) => sum + m.spent, 0); const totalCost = totalRevenue * 0.58; const netProfit = totalRevenue - totalCost;
+        animateValue(document.getElementById('dash-rev'), 0, totalRevenue, 1000); animateValue(document.getElementById('dash-cost'), 0, totalCost, 1000); animateValue(document.getElementById('dash-profit'), 0, netProfit, 1000);
 
-        animateValue(document.getElementById('dash-rev'), 0, totalRevenue, 1000);
-        animateValue(document.getElementById('dash-cost'), 0, totalCost, 1000);
-        animateValue(document.getElementById('dash-profit'), 0, netProfit, 1000);
-
-        // 新增：商品歷史售出量長條圖 (A0 - A4)
-        const salesData = [120, 350, 420, 890, 1500]; // 模擬 A0, A1, A2, A3, A4 銷量
         new Chart(document.getElementById('salesChart'), {
-            type: 'bar',
-            data: { labels: ['A0 Massive', 'A1 Poster', 'A2 Display', 'A3 Wide', 'A4 Standard'],
-                    datasets: [{ label: 'Units Sold', data: salesData, backgroundColor: '#00e5ff', borderRadius: 4 }] },
+            type: 'bar', data: { labels: ['A0 Massive', 'A1 Poster', 'A2 Display', 'A3 Wide', 'A4 Standard'], datasets: [{ label: 'Units Sold', data: [120, 350, 420, 890, 1500], backgroundColor: '#00e5ff', borderRadius: 4 }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
 
-        // 圓餅圖與年齡分布圖
         const sourceCount = {}; mockMembers.forEach(m => { sourceCount[m.source] = (sourceCount[m.source] || 0) + 1; });
         new Chart(document.getElementById('sourceChart'), {
-            type: 'doughnut',
-            data: { labels: Object.keys(sourceCount), datasets: [{ data: Object.values(sourceCount), backgroundColor: ['#00e5ff', '#ff007f', '#7000ff', '#ffffff88'], borderWidth: 0 }] },
+            type: 'doughnut', data: { labels: Object.keys(sourceCount), datasets: [{ data: Object.values(sourceCount), backgroundColor: ['#00e5ff', '#ff007f', '#7000ff', '#ffffff88'], borderWidth: 0 }] },
             options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
         });
 
         const ageGroups = { '18-25':0, '26-35':0, '36-45':0, '46+':0 };
         mockMembers.forEach(m => { if(m.age <= 25) ageGroups['18-25']++; else if(m.age <= 35) ageGroups['26-35']++; else if(m.age <= 45) ageGroups['36-45']++; else ageGroups['46+']++; });
         new Chart(document.getElementById('ageChart'), {
-            type: 'bar', indexAxis: 'y', // 橫向長條圖
-            data: { labels: Object.keys(ageGroups), datasets: [{ data: Object.values(ageGroups), backgroundColor: '#ff007f', borderRadius: 4 }] },
+            type: 'bar', indexAxis: 'y', data: { labels: Object.keys(ageGroups), datasets: [{ data: Object.values(ageGroups), backgroundColor: '#ff007f', borderRadius: 4 }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
 
@@ -506,30 +488,25 @@
     }
 
     function renderMockTables() {
-        // 渲染會員表
         const mBody = document.getElementById('member-table-body'); mBody.innerHTML = '';
         mockMembers.forEach(m => {
             let genderText = m.gender === 'Male' ? (currentLang==='en'?'Male':'男') : (currentLang==='en'?'Female':'女');
             mBody.innerHTML += `<tr><td>${m.id}</td><td>${m.age}</td><td>${genderText}</td><td>${m.source}</td><td>${m.orders}</td><td>NT$ ${m.spent.toLocaleString()}</td></tr>`;
         });
-
-        // 渲染訂單表
         const oBody = document.getElementById('order-table-body'); oBody.innerHTML = '';
         mockOrdersData.forEach(o => {
-            let statClass = o.status === 'pending' ? 'badge-pending' : 'badge-done';
-            let statText = o.status === 'pending' ? dict[currentLang].statPending : dict[currentLang].statDone;
+            let statClass = o.status === 'pending' ? 'badge-pending' : 'badge-done'; let statText = o.status === 'pending' ? dict[currentLang].statPending : dict[currentLang].statDone;
             oBody.innerHTML += `<tr><td><span style="font-family:monospace; color:var(--accent);">${o.oId}</span></td><td>${o.date}</td><td>${o.items}</td><td>NT$ ${o.amount.toLocaleString()}</td><td><span class="badge ${statClass}">${statText}</span></td></tr>`;
         });
     }
 
     // ==========================================
-    // 4. 購物車邏輯 
+    // 4. 購物系統
     // ==========================================
     let currentPreviewPrice = 0; let currentTotal = 0; let cart = []; let orderSeq = 1;
     function calcPreview() {
         const size = parseFloat(document.getElementById('size').value); const material = parseFloat(document.getElementById('material').value); const qty = parseInt(document.getElementById('qty').value) || 1;
-        const newPrice = Math.round(size * material * qty);
-        animateValue(document.getElementById('preview-price'), currentPreviewPrice, newPrice, 400); currentPreviewPrice = newPrice;
+        const newPrice = Math.round(size * material * qty); animateValue(document.getElementById('preview-price'), currentPreviewPrice, newPrice, 400); currentPreviewPrice = newPrice;
     }
     function addToCart() {
         const sizeBox = document.getElementById('size'); const matBox = document.getElementById('material');
@@ -555,7 +532,7 @@
         document.getElementById('receipt-card').classList.remove('hidden');
     }
 
-    // 啟動前台 3D 懸停特效
+    // 前台 3D 懸停特效
     document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
             document.querySelectorAll('#shop-view .glass-card').forEach(card => {
@@ -577,6 +554,5 @@
 
     calcPreview(); renderCart();
 </script>
-
 </body>
 </html>
