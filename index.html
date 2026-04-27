@@ -1,969 +1,582 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title id="page-title">考察行程系統</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Studio | Ultimate Print</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&family=Noto+Sans+TC:wght@300;400;500&family=Libre+Barcode+39&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-
     <style>
-        :root { 
-            --primary: #007AFF; --bg: #F2F2F7; --card: #FFFFFF; 
-            --text: #1C1C1E; --secondary: #8E8E93; --tint: rgba(0, 122, 255, 0.1); --red: #FF3B30; --border: #E5E5EA; --green: #34C759;
+        :root {
+            /* 調整為 Adobe 風格的鮮豔青藍色 */
+            --accent: #00e5ff;
+            --accent-glow: rgba(0, 229, 255, 0.5);
+            --bg-dark: #050505;
+            --card-bg: rgba(20, 20, 25, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --text-sub: #aaaaaa;
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
-        body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; transition: background 0.3s, color 0.3s; }
 
-        /* 地圖與數字標記 */
-        #map-area { position: absolute; top: 0; left: 0; width: 100%; height: 48%; z-index: 1; }
-        #map { width: 100%; height: 100%; }
-        .map-marker-num { background-color: var(--primary); color: #FFF; border-radius: 12px; padding: 0 6px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 2px solid #FFF; box-shadow: 0 2px 5px rgba(0,0,0,0.5); white-space: nowrap; }
-        .leaflet-control-layers { border-radius: 12px !important; border: 1px solid var(--border) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }
-
-        /* 抽屜介面 */
-        .content { 
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;
-            background: var(--card); opacity: 0.95; backdrop-filter: blur(25px) saturate(180%);
-            border-top-left-radius: 24px; border-top-right-radius: 24px;
-            z-index: 10; display: flex; flex-direction: column;
-            box-shadow: 0 -10px 30px rgba(0,0,0,0.3); transition: height 0.3s;
+        body {
+            font-family: 'Montserrat', 'Noto Sans TC', sans-serif;
+            margin: 0; padding: 20px; min-height: 100vh;
+            color: var(--text-main);
+            background: linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16213e, #0f0c29);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            display: flex; justify-content: center; align-items: center;
+            overflow-x: hidden; perspective: 2000px;
         }
-        .drawer-handle { width: 40px; height: 5px; background: var(--secondary); border-radius: 10px; margin: 10px auto; cursor: pointer; opacity: 0.5; }
+        @keyframes gradientBG { 0% {background-position: 0% 50%;} 50% {background-position: 100% 50%;} 100% {background-position: 0% 50%;} }
+        @keyframes springPopIn { 0% { opacity: 0; transform: translateY(40px) scale(0.9); } 60% { opacity: 1; transform: translateY(-5px) scale(1.02); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* 導覽列 */
-        .nav-header { padding: 0 16px 8px; display: flex; flex-direction: column; }
-        .trip-title-display { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 10px; color: var(--text); }
-        .day-bar { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
-        .day-bar::-webkit-scrollbar { display: none; }
-        .day-pill { min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
-        .day-pill.active { background: var(--primary); color: #FFF; border-color: var(--primary); }
-
-        .tab-group { display: flex; background: var(--bg); padding: 3px; border-radius: 12px; margin: 0 16px 10px; border: 1px solid var(--border); }
-        .tab-item { flex: 1; border: none; height: 44px; border-radius: 9px; font-weight: 600; font-size: 13px; background: transparent; color: var(--secondary); cursor: pointer; }
-        .tab-item.active { background: var(--card); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-
-        .scroll-area { flex: 1; overflow-y: auto; padding: 0 16px 100px; }
-
-        /* 拖曳把手與卡片 */
-        .drag-handle { font-size: 24px; color: #C7C7CC; padding: 0 10px; display: flex; align-items: center; cursor: grab; transition: color 0.2s; }
-        .drag-handle:active { cursor: grabbing; color: var(--primary); }
-        .sortable-ghost { opacity: 0.4; }
-
-        /* 登機證與卡片 */
-        .boarding-pass { display: flex; background: var(--card); border-radius: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; overflow: hidden; color: var(--text); transition: opacity 0.3s; }
-        .boarding-pass::before, .boarding-pass::after { content: ''; position: absolute; top: 50%; width: 24px; height: 24px; background: var(--bg); border-radius: 50%; transform: translateY(-50%); z-index: 2; border: 1px solid var(--border); }
-        .boarding-pass::before { left: -13px; border-right-color: transparent; }
-        .boarding-pass::after { right: -13px; border-left-color: transparent; }
-        .bp-main { flex: 7; padding: 16px; border-right: 2px dashed var(--border); }
-        .bp-stub { flex: 3; padding: 16px; background: var(--tint); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        /* === 認證彈窗 (Login/Register) - Adobe 鮮豔風格 === */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(20px);
+            display: flex; justify-content: center; align-items: center; z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        .modal-content {
+            background: rgba(15, 15, 20, 0.8); border: 1px solid var(--card-border);
+            padding: 40px; border-radius: 24px; text-align: center; width: 100%; max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8); position: relative; overflow: hidden; 
+        }
+        /* Adobe 風格：移除灰階，使用色彩鮮豔的創意流體圖片 */
+        .modal-clear-img {
+            width: 100%; height: 160px; background-color: #1a1a1a;
+            background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80');
+            background-size: cover; background-position: center; border-radius: 12px; margin-bottom: 20px;
+        }
         
-        .bp-train .bp-stub { background: rgba(52, 199, 89, 0.1); }
-        .bp-train .bp-main-title { color: var(--green) !important; }
-        .bp-subway .bp-stub { background: rgba(175, 82, 222, 0.1); }
-        .bp-subway .bp-main-title { color: #AF52DE !important; }
+        .auth-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .auth-tab { flex: 1; background: transparent; border: 1px solid var(--card-border); color: var(--text-sub); padding: 10px; border-radius: 8px; cursor: pointer; transition: 0.3s; font-weight: 500; }
+        .auth-tab.active { background: rgba(255,255,255,0.1); color: white; border-color: var(--accent); }
 
-        .card { background: var(--card); border-radius: 18px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: relative; transition: opacity 0.3s; }
-        .completed { opacity: 0.5; filter: grayscale(60%); }
-        .spot-thumb { width: 75px; height: 75px; border-radius: 12px; object-fit: cover; background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--primary); font-weight: bold; overflow: hidden; }
-        .spot-info { flex: 1; min-width: 0; color: var(--text); }
-        .spot-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: flex-start; }
-        .spot-memo { font-size: 12px; color: var(--secondary); line-height: 1.4; margin: 6px 0 2px 0; }
+        .lang-toggle-modal {
+            background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-border); color: white;
+            padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
+            position: absolute; top: 15px; right: 15px; transition: 0.3s; backdrop-filter: blur(5px);
+        }
+        .lang-toggle-modal:hover { background: rgba(255,255,255,0.2); }
+
+        /* === 共通 UI === */
+        .glass-card {
+            background: var(--card-bg); backdrop-filter: blur(30px); border: 1px solid var(--card-border);
+            border-radius: 24px; padding: 30px; display: flex; flex-direction: column; justify-content: space-between;
+            animation: springPopIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; transform-style: preserve-3d; will-change: transform;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1, h2 { font-weight: 700; margin: 0 0 10px 0; }
+        h1 { font-size: 3.5rem; line-height: 1.1; letter-spacing: -1px; transform: translateZ(30px); }
+        h2 { font-size: 1.1rem; letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; transform: translateZ(20px);}
+        .highlight { color: var(--accent); text-shadow: 0 0 15px var(--accent-glow); }
         
-        .cat-tag { font-size: 10px; color: var(--primary); background: var(--tint); padding: 3px 6px; border-radius: 6px; font-weight: bold; }
-        .btn-map { font-size: 10px; font-weight: bold; color: var(--primary); background: var(--tint); padding: 3px 8px; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: opacity 0.2s; border: 1px solid var(--tint); }
-        .btn-map:active { opacity: 0.6; }
+        select, input {
+            width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border);
+            color: white; padding: 12px 15px; border-radius: 12px; font-size: 0.9rem; outline: none;
+            box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s; margin-bottom: 15px;
+        }
+        select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); }
+
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; transform: translateZ(10px);}
+        .form-row label { font-size: 0.85rem; color: var(--text-sub); width: 80px; }
+        .form-row select, .form-row input { margin-bottom: 0; }
+
+        .btn {
+            background: var(--text-main); color: var(--bg-dark); border: none; padding: 15px; border-radius: 12px;
+            font-weight: 700; cursor: pointer; transition: 0.3s; width: 100%; text-transform: uppercase;
+            position: relative; overflow: hidden; transform: translateZ(20px);
+        }
+        .btn::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent); transform: skewX(-25deg); transition: 0.5s ease-in-out; }
+        .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent-glow); }
+        .btn:hover::after { left: 150%; }
+        .btn:active { transform: translateZ(10px) scale(0.96); }
+        .btn-outline { background: transparent; border: 1px solid var(--card-border); color: var(--text-main); margin-top: 10px; }
+        .btn-outline::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); }
+
+        /* 訪客登入按鈕 */
+        .btn-login-shop { position: absolute; top: 25px; left: 30px; background: rgba(0,0,0,0.5); border: 1px solid var(--card-border); color: white; padding: 8px 15px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; backdrop-filter: blur(5px); z-index: 10; transition: 0.3s; }
+        .btn-login-shop:hover { border-color: var(--accent); color: var(--accent); }
+
+        .hidden { display: none !important; }
+
+        /* === 購物系統排版 === */
+        #shop-view .bento-container { display: grid; grid-template-columns: 1.2fr 1fr 1fr; grid-template-rows: auto auto; gap: 20px; max-width: 1200px; width: 100vw; position: relative;}
         
-        .cost-row { display: flex; gap: 8px; font-size: 13px; font-weight: 700; margin-top: 4px; align-items: center; }
-
-        /* 內聯編輯與表單 */
-        .inline-edit-box { display: flex; flex-direction: column; gap: 10px; background: var(--bg); padding: 12px; border-radius: 12px; width: 100%; border: 1px solid var(--border); cursor: default; margin-bottom: 12px; }
-        .input-row { display: flex; gap: 8px; align-items: center; }
-        .input-label { font-size: 12px; font-weight: 600; color: var(--secondary); margin-bottom: 2px; margin-top: 4px; display: block; }
-        .ios-input { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 14px; background: var(--card); color: var(--text); }
+        /* Adobe 風格色彩斑斕的背景 */
+        .hero-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #111; background-image: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1200&q=80'); background-size: cover; background-position: center; opacity: 0.5; z-index: -1; transform: scale(1.1) translateZ(-50px); mix-blend-mode: overlay;}
         
-        .btn-action { min-height: 44px; border-radius: 10px; border: none; background: var(--bg); color: var(--primary); font-weight: 600; padding: 0 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: 1; }
-        .btn-save { background: var(--primary); color: #FFF; width: 100%; margin-top: 4px; }
-        .btn-complete { background: var(--green); color: #FFF; }
-        .btn-incomplete { background: var(--secondary); color: #FFF; }
+        .card-hero { grid-column: span 1; grid-row: span 2; position: relative; overflow: hidden; }
+        .card-config { grid-column: span 1; grid-row: span 2; }
+        .card-cart { grid-column: span 1; grid-row: span 1; }
+        .card-buyer { grid-column: span 1; grid-row: span 1; }
+        .barcode { font-family: 'Libre Barcode 39', cursive; font-size: 45px; line-height: 1; color: var(--accent); margin: 10px 0; font-weight: normal; }
 
-        /* 總覽與圖表 */
-        .overview-panel { background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 15px; border: 1px solid var(--border); color: var(--text); }
-        .chart-flex-container { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
-        .chart-canvas-wrapper { width: 220px; height: 220px; flex-shrink: 0; margin: 0 auto; position: relative; }
-        .chart-summary-list { flex: 1; min-width: 200px; font-size: 12px; color: var(--secondary); }
-        .chart-summary-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
-        .chart-summary-item b { color: var(--text); }
-        .bar-container { position: relative; height: 200px; width: 100%; margin-top: 10px; }
+        /* === 戰情室排版 (Admin View) === */
+        #admin-view { width: 100%; max-width: 1200px; animation: fadeIn 0.5s ease; }
+        #admin-view .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+        
+        /* 後台導覽列 */
+        .admin-nav { display: flex; gap: 15px; }
+        .admin-nav button { width: auto; padding: 10px 20px; font-size: 0.85rem; margin: 0; transform: none; }
+        .admin-nav button.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        
+        /* 後台資料表樣式 (Glass Table) */
+        .table-container { width: 100%; overflow-x: auto; max-height: 60vh; margin-top: 10px;}
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+        th { padding: 15px; border-bottom: 1px solid var(--accent); color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px; position: sticky; top: 0; background: rgba(10,10,15,0.9); z-index: 10;}
+        td { padding: 15px; border-bottom: 1px solid var(--card-border); color: var(--text-main); }
+        tr:hover td { background: rgba(255,255,255,0.05); }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge-pending { background: rgba(255, 171, 0, 0.2); color: #ffab00; border: 1px solid #ffab00;}
+        .badge-done { background: rgba(46, 213, 115, 0.2); color: #2ed573; border: 1px solid #2ed573;}
 
-        /* 花費彙整表 */
-        .expense-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
-        .expense-table th { padding: 8px; border-bottom: 2px solid var(--border); color: var(--primary); }
-        .expense-table td { padding: 8px; border-bottom: 1px solid var(--border); }
-        .expense-day-row { background: var(--tint); color: var(--primary); font-weight: bold; }
+        /* 面板區塊顯示控制 */
+        .admin-panel { display: none; }
+        .admin-panel.active { display: block; animation: fadeIn 0.5s ease; }
 
-        /* 懸浮按鈕 */
-        .fab-btn { display: none; position: fixed; bottom: 30px; right: 20px; width: 56px; height: 56px; border-radius: 28px; background: var(--primary); color: white; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 100; cursor: pointer; justify-content: center; align-items: center; transition: background 0.3s; }
-        #fab-edit { bottom: 100px; }
+        /* Dashboard 網格 */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .metric-card { grid-column: span 1; padding: 20px; text-align: center; transform: none !important; }
+        .metric-title { font-size: 0.8rem; color: var(--text-sub); text-transform: uppercase; margin-bottom: 10px; }
+        .metric-value { font-size: 2rem; font-weight: 700; color: var(--text-main); }
+        
+        .chart-card-large { grid-column: span 2; height: 320px; padding: 20px; transform: none !important;}
+        .chart-container { position: relative; height: 100%; width: 100%; }
 
-        /* 模態彈窗 (設定) */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; backdrop-filter: blur(5px); padding: 20px; }
-        .modal-content { background: var(--card); color: var(--text); width: 100%; max-width: 400px; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); }
-        .day-mgt-row { display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px; border-radius: 8px; margin-bottom: 8px;}
-
-        /* PDF 列印完美比例保護 */
-        @media print { 
-            @page { size: A4 portrait; margin: 15mm; }
-            .no-print, .fab-btn, .leaflet-control-container, .drag-handle { display: none !important; } 
-            .content { position: static !important; height: auto !important; display: block !important; background: white !important; box-shadow: none !important; border-radius: 0 !important; }
-            .scroll-area { overflow: visible !important; height: auto !important; padding: 0 !important; }
-            body { overflow: visible !important; height: auto !important; background: white !important; color: black !important; }
-            
-            .chart-print-panel { height: 42vh !important; page-break-inside: avoid; border: 1px solid #CCC !important; box-shadow: none !important; margin-bottom: 20px !important; color: black !important; background: white !important; display: flex !important; flex-direction: column !important; justify-content: center !important;}
-            .overview-panel, .card, .boarding-pass { break-inside: avoid; border: 1px solid #CCC !important; box-shadow: none !important; margin-bottom: 10px !important; color: black !important; background: white !important; }
-            
-            .chart-flex-container { display: flex !important; flex-direction: row !important; align-items: center !important; }
-            .chart-canvas-wrapper { width: 250px !important; height: 250px !important; margin-right: 20px !important; flex-shrink: 0 !important;}
-            canvas { width: 250px !important; height: 250px !important; max-width: 250px !important; max-height: 250px !important; }
-            
-            .bar-container { width: 100% !important; height: 200px !important; page-break-inside: avoid; }
-            .bar-container canvas { width: 100% !important; height: 200px !important; max-height: 200px !important; }
-            
-            .page-break { page-break-after: always; }
-            * { color: black !important; }
+        @media (max-width: 900px) {
+            #shop-view .bento-container { grid-template-columns: 1fr; }
+            #shop-view .card-hero, #shop-view .card-config, #shop-view .card-cart, #shop-view .card-buyer { grid-column: span 1; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .metric-card, .chart-card-large { grid-column: span 1; }
+            .admin-nav { flex-wrap: wrap; }
+            body { perspective: none; } 
         }
     </style>
 </head>
 <body>
 
-<div id="map-area" class="no-print"><div id="map"></div></div>
+    <div id="auth-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="lang-toggle-modal" onclick="toggleLang()" data-i18n="btnLang">EN / 中</button>
+            <div class="modal-clear-img"></div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tab-login" onclick="switchTab('login')" data-i18n="tabLogin">LOGIN</button>
+                <button class="auth-tab" id="tab-register" onclick="switchTab('register')" data-i18n="tabRegister">REGISTER</button>
+            </div>
 
-<div class="content" id="main-drawer">
-    <div class="drawer-handle no-print" onclick="toggleExpand()"></div>
-    <div class="nav-header no-print">
-        <div class="trip-title-display" id="display-trip-title">System</div>
-        <div class="day-bar" id="day-bar"></div>
-    </div>
-    
-    <div class="tab-group no-print">
-        <button class="tab-item active" id="tab-itinerary" onclick="switchTab('itinerary')">Itinerary</button>
-        <button class="tab-item" id="tab-overview" onclick="switchTab('overview')">Overview</button>
-    </div>
+            <div id="form-login">
+                <input type="text" id="login-acc" placeholder="Account ID" data-i18n-ph="phAccount">
+                <input type="password" id="login-pwd" placeholder="Password" data-i18n-ph="phPassword">
+                <button class="btn" onclick="handleLogin()" data-i18n="btnLogin">SIGN IN</button>
+                <button class="btn btn-outline" onclick="closeAuthModal()" data-i18n="btnGuest">Guest Access</button>
+                <p style="font-size: 0.75rem; color: var(--text-sub); margin-top: 15px;">Admin: admin / 1234</p>
+            </div>
 
-    <div class="scroll-area" id="view-port"></div>
-</div>
-
-<button class="fab-btn" id="fab-settings" onclick="openSettings()">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-</button>
-
-<button class="fab-btn" id="fab-edit" onclick="toggleEditMode()">
-    <svg id="icon-pencil" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-    <svg id="icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-</button>
-
-<div class="modal-overlay" id="settings-modal">
-    <div class="modal-content">
-        <h3 id="lbl-settings-title" style="margin-top:0; border-bottom: 2px solid var(--border); padding-bottom: 10px;">Settings</h3>
-        
-        <div class="input-row" style="margin-bottom:10px;">
-            <div style="flex:1;"><div class="input-label" id="lbl-lang">Language</div><select id="cfg-lang" class="ios-input" onchange="applyTranslation(true)"><option value="zh-TW">繁體中文</option><option value="en">English</option></select></div>
-            <div style="flex:1;"><div class="input-label" id="lbl-base-theme">Base Theme</div><select id="cfg-base-theme" class="ios-input" onchange="applyTheme(true)"><option value="light">Light</option><option value="dark">Dark</option></select></div>
+            <div id="form-register" class="hidden">
+                <input type="text" id="reg-name" placeholder="Full Name" data-i18n-ph="phName">
+                <input type="tel" id="reg-phone" placeholder="Phone Number" data-i18n-ph="phPhone">
+                <input type="email" id="reg-email" placeholder="Email Address" data-i18n-ph="phEmail">
+                <input type="password" id="reg-pwd" placeholder="Password" data-i18n-ph="phPassword">
+                <button class="btn" onclick="handleRegister()" data-i18n="btnRegister">CREATE ACCOUNT</button>
+            </div>
         </div>
-        <div class="input-label" id="lbl-accent">Accent Color</div>
-        <select id="cfg-accent" class="ios-input" onchange="applyTheme(true)" style="margin-bottom:10px;">
-            <option value="blue">Blue</option><option value="orange">Orange</option>
-            <option value="mono">Mono</option><option value="gray">Gray</option>
-        </select>
-        <div class="input-label" id="lbl-trip-name">Trip Name</div><input id="cfg-title" class="ios-input">
-        <div class="input-label" id="lbl-start-date">Start Date</div><input id="cfg-date" type="date" class="ios-input">
-        <div class="input-row">
-            <div style="flex:1;"><div class="input-label" id="lbl-base-curr">Base Curr</div><input id="cfg-base" class="ios-input"></div>
-            <div style="flex:1;"><div class="input-label" id="lbl-target-curr">Target Curr</div><input id="cfg-target" class="ios-input"></div>
-        </div>
-        <div class="input-label" id="lbl-rate">Rate</div><input id="cfg-rate" type="number" step="0.001" class="ios-input">
-        <h4 id="lbl-day-mgt" style="margin: 15px 0 5px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">Days Management</h4>
-        <div id="settings-days-list" style="margin-bottom: 10px;"></div>
-        <button class="btn-action" id="btn-add-day" style="border: 1px dashed var(--primary); background: transparent;" onclick="addDayInSettings()">Add Day</button>
-        <button class="btn-action btn-save" id="btn-save-settings" style="margin-top: 20px;" onclick="saveSettings()">Save</button>
-        <button class="btn-action" id="btn-cancel-settings" style="background:var(--bg); color:var(--text);" onclick="closeSettings()">Cancel</button>
     </div>
-</div>
+
+    <div id="shop-view" class="hidden">
+        <div class="bento-container">
+            <div class="glass-card card-hero">
+                <button class="btn-login-shop" onclick="openAuthModal()" data-i18n="btnReLogin">MEMBER LOGIN</button>
+                <div class="hero-bg"></div>
+                <div style="margin-top: 40px;">
+                    <p style="letter-spacing: 4px; font-size: 0.8rem; color: var(--accent); transform: translateZ(20px);">PRO STUDIO.</p>
+                    <h1>Print<br>The<br><span class="highlight">Unseen.</span></h1>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--text-sub); line-height: 1.8; transform: translateZ(20px);">We focus on ultimate color reproduction and paper texture. This is a precision console for your art.</p>
+            </div>
+
+            <div class="glass-card card-config">
+                <h2 data-i18n="configTitle">Parameters</h2>
+                <div class="form-row">
+                    <label data-i18n="labelSize">SIZE</label>
+                    <select id="size" onchange="calcPreview()">
+                        <option value="800" data-name="A0">A0 Massive</option>
+                        <option value="400" data-name="A1">A1 Poster</option>
+                        <option value="200" data-name="A2">A2 Display</option>
+                        <option value="100" data-name="A3">A3 Wide</option>
+                        <option value="50" data-name="A4">A4 Standard</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label data-i18n="labelPaper">PAPER</label>
+                    <select id="material" onchange="calcPreview()">
+                        <option value="1" data-name="Matte">Premium Matte</option>
+                        <option value="1.8" data-name="FineArt">Fine Art Acid-Free</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label data-i18n="labelCopies">COPIES</label>
+                    <input type="number" id="qty" value="1" min="1" oninput="calcPreview()">
+                </div>
+                <div style="margin-top: auto; transform: translateZ(20px);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px;">
+                        <span style="font-size: 0.8rem; color: var(--text-sub);" data-i18n="estCost">EST. COST</span>
+                        <span style="font-size: 1.5rem; font-weight: 700;">NT$ <span id="preview-price">0</span></span>
+                    </div>
+                    <button class="btn btn-outline" onclick="addToCart()" data-i18n="btnAdd">Add to Queue</button>
+                </div>
+            </div>
+
+            <div class="glass-card card-cart">
+                <h2 data-i18n="cartTitle">Print Queue</h2>
+                <div id="cart-list" style="max-height: 100px; overflow-y: auto; margin-bottom: 10px; transform: translateZ(10px);"></div>
+                <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; transform: translateZ(20px);">
+                    <span style="font-size: 0.8rem; color: var(--text-sub);" data-i18n="total">TOTAL</span>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">NT$ <span id="final-total">0</span></div>
+                </div>
+            </div>
+
+            <div class="glass-card card-buyer">
+                <h2 data-i18n="buyerTitle">Client Info</h2>
+                <div class="form-row"><input type="text" id="buyer-name" placeholder="Full Name" data-i18n-ph="phName"></div>
+                <div class="form-row"><input type="tel" id="buyer-phone" placeholder="Phone Number" data-i18n-ph="phPhone"></div>
+                <button class="btn" onclick="checkout()" data-i18n="btnCheckout" style="margin-top: 10px;">Submit Order</button>
+                <div id="receipt-card" class="hidden" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--card-border); text-align: center; transform: translateZ(10px);">
+                    <p style="color: var(--accent); font-size: 0.8rem; margin:0;" data-i18n="orderConfirmed">Order Confirmed</p>
+                    <div class="barcode" id="r-barcode">*PRT-000*</div>
+                    <p style="font-family: monospace; font-size: 0.9rem; margin:0;" id="r-id"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-view" class="hidden">
+        <div class="header">
+            <div>
+                <p style="letter-spacing: 4px; font-size: 0.8rem; color: var(--accent); margin:0;">PRO STUDIO</p>
+                <h1 data-i18n="adminTitle">Dashboard Console</h1>
+            </div>
+            <div class="admin-nav">
+                <button class="btn btn-outline active" id="btn-nav-dashboard" onclick="switchAdminTab('dashboard')" data-i18n="navDashboard">Dashboard</button>
+                <button class="btn btn-outline" id="btn-nav-members" onclick="switchAdminTab('members')" data-i18n="navMembers">Members</button>
+                <button class="btn btn-outline" id="btn-nav-orders" onclick="switchAdminTab('orders')" data-i18n="navOrders">Orders</button>
+                <button class="btn" onclick="location.reload()" data-i18n="btnLogout">LOGOUT</button>
+            </div>
+        </div>
+
+        <div id="panel-dashboard" class="admin-panel active">
+            <div class="dashboard-grid">
+                <div class="glass-card metric-card">
+                    <div class="metric-title" data-i18n="metRevenue">Gross Revenue</div>
+                    <div class="metric-value">NT$ <span id="dash-rev">0</span></div>
+                </div>
+                <div class="glass-card metric-card">
+                    <div class="metric-title" data-i18n="metCost">Est. Cost</div>
+                    <div class="metric-value" style="color: #ff4757;">NT$ <span id="dash-cost">0</span></div>
+                </div>
+                <div class="glass-card metric-card">
+                    <div class="metric-title" data-i18n="metProfit">Net Profit</div>
+                    <div class="metric-value" style="color: #2ed573;">NT$ <span id="dash-profit">0</span></div>
+                </div>
+                <div class="glass-card metric-card">
+                    <div class="metric-title" data-i18n="metOfficer">Duty Officer</div>
+                    <div class="metric-value" style="color: white; font-size: 1.5rem; margin-top: 5px;">Admin_01</div>
+                </div>
+
+                <div class="glass-card chart-card-large">
+                    <h2 data-i18n="chartSales">Product Sales Volume</h2>
+                    <div class="chart-container"><canvas id="salesChart"></canvas></div>
+                </div>
+                <div class="glass-card chart-card-large">
+                    <h2 data-i18n="chartReferrer">Acquisition & Demographics</h2>
+                    <div class="chart-container" style="display:flex; gap:10px;">
+                        <div style="flex:1;"><canvas id="sourceChart"></canvas></div>
+                        <div style="flex:1;"><canvas id="ageChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-members" class="admin-panel">
+            <div class="glass-card" style="transform: none !important;">
+                <h2 data-i18n="panelMembersTitle">Member Directory</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th data-i18n="colAge">Age</th>
+                                <th data-i18n="colGender">Gender</th>
+                                <th data-i18n="colSource">Source</th>
+                                <th data-i18n="colOrders">Orders</th>
+                                <th data-i18n="colSpent">Total Spent</th>
+                            </tr>
+                        </thead>
+                        <tbody id="member-table-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-orders" class="admin-panel">
+            <div class="glass-card" style="transform: none !important;">
+                <h2 data-i18n="panelOrdersTitle">Live Order Queue</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th data-i18n="colDate">Date</th>
+                                <th data-i18n="colItems">Items</th>
+                                <th data-i18n="colAmount">Amount</th>
+                                <th data-i18n="colStatus">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="order-table-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
 
 <script>
-    // --- 1. 全域工具 ---
-    if (typeof window !== 'undefined') {
-        window.getDayDate = function(dayNum) {
-            if(!config || !config.startDate) return "YYYY-MM-DD";
-            let d = new Date(config.startDate); 
-            d.setDate(d.getDate() + (dayNum - 1));
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        };
-        window.formatCoord = function(lat, lng) { return `${Math.abs(lat).toFixed(4)}N ${Math.abs(lng).toFixed(4)}E`; };
-    }
-    if (typeof ChartDataLabels !== 'undefined') { Chart.register(ChartDataLabels); }
-
-    // --- 翻譯字典 ---
-    const i18n = {
-        'zh-TW': {
-            'itinerary': '日行程', 'overview': '總覽', 'quickExpense': '快速記帳', 'addSpot': '新增行程',
-            'save': '儲存', 'delete': '刪除', 'cancel': '取消', 'mapBtn': 'Map', 'edit': '編輯',
-            'expenseTitle': '消費預算分析', 'catTitle': '行程分類數量', 'stepTitle': '每日步數紀錄', 'completionTitle': '行程完成率',
-            'exportPDF': '匯出 PDF', 'totalCost': '預估總支出', 'expenseTable': '花費支出彙整表', 'addTicket': '新增票券', 'tripSummary': '行程概述',
-            'settingsTitle': '系統參數設定', 'lang': '介面語言', 'baseTheme': '主色主題', 'accent': '強調副色', 
-            'light': '亮色', 'dark': '暗色', 'blue': '藍色', 'orange': '橘色', 'mono': '黑白', 'gray': '灰色',
-            'tripName': '行程名稱', 'startDate': '出發日期', 'baseCurr': '基礎幣種', 'targetCurr': '目標幣種', 
-            'rate': '匯率', 'dayMgt': '天數與步數管理', 'addDay': '新增一天', 'saveSettings': '儲存設定',
-            'markComplete': '標記完成', 'markIncomplete': '取消完成', 'completed': '已完成', 'incomplete': '未完成',
-            'item': '項目', 'category': '分類', 'baseCost': '原幣花費', 'targetCost': '換算花費', 'day': '第', 'dayUnit': '天',
-            'time': '時間', 'name': '名稱', 'lat': '緯度', 'lng': '經度', 'memo': '簡介備註...', 'imgUrl': '圖片網址', 'expNote': '花費說明', 'amount': '金額',
-            'ticketType': '票券類型', 'flightAndNo': '營運公司與班次', 'locLatLng': '出發座標 (緯/經)', 'routeTime': '起降與時間', 'seatCost': '座位與費用',
-            'flight': '飛機', 'train': '火車/高鐵', 'subway': '地鐵/巴士', 'sortByTime': '依時間排序',
-            'cats': ["美食", "鐵路", "博物館", "美術館", "科學館", "航太館", "自然景點", "交通點", "觀光名勝", "古蹟", "住宿", "航班", "其他"]
+    // ==========================================
+    // 1. 多國語系引擎 (擴充翻譯字典)
+    // ==========================================
+    let currentLang = 'en'; 
+    const dict = {
+        en: {
+            btnLang: "EN / 中", tabLogin: "LOGIN", tabRegister: "REGISTER", phAccount: "Account ID", phPassword: "Password", phName: "Full Name", phPhone: "Phone Number", phEmail: "Email Address",
+            btnLogin: "SIGN IN", btnGuest: "Guest Access", btnRegister: "CREATE ACCOUNT", btnReLogin: "MEMBER LOGIN",
+            configTitle: "Parameters", labelSize: "SIZE", labelPaper: "PAPER", labelCopies: "COPIES", estCost: "EST. COST", btnAdd: "Add to Queue",
+            cartTitle: "Print Queue", total: "TOTAL", buyerTitle: "Client Info", btnCheckout: "Submit Order", orderConfirmed: "Order Confirmed", emptyCart: "Queue is empty.",
+            adminTitle: "Dashboard Console", btnLogout: "LOGOUT", navDashboard: "Dashboard", navMembers: "Members", navOrders: "Orders",
+            metRevenue: "Gross Revenue", metCost: "Est. Cost", metProfit: "Net Profit", metOfficer: "Duty Officer", 
+            chartSales: "Historical Sales Volume", chartReferrer: "Acquisition & Demographics",
+            panelMembersTitle: "Member Directory", colAge: "Age", colGender: "Gender", colSource: "Source", colOrders: "Orders", colSpent: "Total Spent",
+            panelOrdersTitle: "Live Order Queue", colDate: "Date", colItems: "Items", colAmount: "Amount", colStatus: "Status", statPending: "Pending", statDone: "Completed"
         },
-        'en': {
-            'itinerary': 'Itinerary', 'overview': 'Overview', 'quickExpense': 'Quick Expense', 'addSpot': 'Add Spot',
-            'save': 'Save', 'delete': 'Delete', 'cancel': 'Cancel', 'mapBtn': 'Map', 'edit': 'Edit',
-            'expenseTitle': 'Expense Analysis', 'catTitle': 'Category Count', 'stepTitle': 'Daily Steps', 'completionTitle': 'Completion Rate',
-            'exportPDF': 'Export PDF', 'totalCost': 'Est. Total Cost', 'expenseTable': 'Expense Summary', 'addTicket': 'Add Ticket', 'tripSummary': 'Trip Summary',
-            'settingsTitle': 'System Settings', 'lang': 'Language', 'baseTheme': 'Base Theme', 'accent': 'Accent Color',
-            'light': 'Light', 'dark': 'Dark', 'blue': 'Blue', 'orange': 'Orange', 'mono': 'Mono', 'gray': 'Gray',
-            'tripName': 'Trip Name', 'startDate': 'Start Date', 'baseCurr': 'Base Curr', 'targetCurr': 'Target Curr', 
-            'rate': 'Rate', 'dayMgt': 'Days & Steps', 'addDay': 'Add Day', 'saveSettings': 'Save Settings',
-            'markComplete': 'Complete', 'markIncomplete': 'Undo', 'completed': 'Completed', 'incomplete': 'Pending',
-            'item': 'Item', 'category': 'Category', 'baseCost': 'Base Cost', 'targetCost': 'Converted', 'day': 'Day ', 'dayUnit': '',
-            'time': 'Time', 'name': 'Name', 'lat': 'Lat', 'lng': 'Lng', 'memo': 'Memo...', 'imgUrl': 'Image URL', 'expNote': 'Expense Note', 'amount': 'Amount',
-            'ticketType': 'Ticket Type', 'flightAndNo': 'Company & No', 'locLatLng': 'Location (Lat/Lng)', 'routeTime': 'Route & Time', 'seatCost': 'Seat & Cost',
-            'flight': 'Flight', 'train': 'Train/HSR', 'subway': 'Subway/Bus', 'sortByTime': 'Sort by Time',
-            'cats': ["Food", "Railway", "Museum", "Art Gallery", "Science", "Aerospace", "Nature", "Transit", "Attraction", "Historic", "Hotel", "Flight", "Others"]
+        zh: {
+            btnLang: "EN / 中", tabLogin: "登入", tabRegister: "註冊", phAccount: "帳號", phPassword: "密碼", phName: "真實姓名", phPhone: "聯絡電話", phEmail: "電子信箱",
+            btnLogin: "登入系統", btnGuest: "以訪客身分繼續", btnRegister: "建立帳戶", btnReLogin: "會員登入",
+            configTitle: "規格設定", labelSize: "尺寸", labelPaper: "紙材", labelCopies: "數量", estCost: "單項預估", btnAdd: "加入佇列",
+            cartTitle: "輸出佇列", total: "總計金額", buyerTitle: "聯絡資訊", btnCheckout: "確認並結帳", orderConfirmed: "訂單已成立", emptyCart: "佇列目前為空。",
+            adminTitle: "戰情管理中心", btnLogout: "登出", navDashboard: "戰情看板", navMembers: "會員列表", navOrders: "接單管理",
+            metRevenue: "總營業額", metCost: "預估成本", metProfit: "淨利潤", metOfficer: "值班人員", 
+            chartSales: "商品歷史售出量", chartReferrer: "客戶來源與年齡層",
+            panelMembersTitle: "會員資料總表", colAge: "年齡", colGender: "性別", colSource: "來源", colOrders: "下單次數", colSpent: "累積消費",
+            panelOrdersTitle: "即時接單看板", colDate: "日期", colItems: "項目", colAmount: "金額", colStatus: "狀態", statPending: "製作中", statDone: "已完成"
         }
     };
 
-    function safeParse(key, fallback) {
-        try { let val = localStorage.getItem(key); return val ? JSON.parse(val) : fallback; } 
-        catch(e) { return fallback; }
+    function toggleLang() {
+        currentLang = currentLang === 'en' ? 'zh' : 'en';
+        document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = dict[currentLang][el.getAttribute('data-i18n')]; });
+        document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = dict[currentLang][el.getAttribute('data-i18n-ph')]; });
+        renderCart(); 
+        if(document.getElementById('admin-view').classList.contains('hidden') === false) {
+            renderMockTables(); // 更新表格翻譯
+        }
     }
 
-    let defaultConfig = { title: "2026 日本航太考察", baseCurr: "JPY", targetCurr: "TWD", rate: 0.21, startDate: "2026-03-22", lang: "zh-TW", baseTheme: "light", accent: "blue" };
-    let config = safeParse('v88_config', defaultConfig); // V88 金鑰
-    if(!config.lang) config.lang = 'zh-TW'; if(!config.baseTheme) config.baseTheme = 'light'; if(!config.accent) config.accent = 'blue';
+    // ==========================================
+    // 2. 視圖與驗證邏輯
+    // ==========================================
+    function switchTab(tab) {
+        document.getElementById('tab-login').classList.remove('active'); document.getElementById('tab-register').classList.remove('active');
+        document.getElementById('form-login').classList.add('hidden'); document.getElementById('form-register').classList.add('hidden');
+        document.getElementById(`tab-${tab}`).classList.add('active'); document.getElementById(`form-${tab}`).classList.remove('hidden');
+    }
 
-    let extras = safeParse('v88_extras', []); // V88 金鑰
-    let editTarget = null; let expenseChart = null; let categoryChart = null; let stepsChart = null; let completionChart = null;
-    let tempItinerary = [];
-    let curIdx = 0, currentTab = 'itinerary', map, pathLine, isExpanded = false, isEditMode = false;
-    let mapMarkers = [];
+    function openAuthModal() {
+        document.getElementById('shop-view').classList.add('hidden');
+        document.getElementById('auth-modal').style.display = 'flex';
+        setTimeout(() => document.getElementById('auth-modal').style.opacity = '1', 10);
+    }
 
-    function t(key) { return i18n[config.lang][key] || key; }
+    function closeAuthModal() {
+        document.getElementById('auth-modal').style.opacity = '0';
+        setTimeout(() => { document.getElementById('auth-modal').style.display = 'none'; document.getElementById('shop-view').classList.remove('hidden'); }, 500);
+    }
 
-    function applyTheme(fromUI = false) {
-        if(fromUI) { config.baseTheme = document.getElementById('cfg-base-theme').value; config.accent = document.getElementById('cfg-accent').value; }
-        const root = document.documentElement;
-        if (config.baseTheme === 'dark') {
-            root.style.setProperty('--bg', '#121212'); root.style.setProperty('--card', '#1C1C1E');
-            root.style.setProperty('--text', '#FFFFFF'); root.style.setProperty('--secondary', '#A0A0A5'); root.style.setProperty('--border', '#333333');
+    function handleRegister() {
+        const name = document.getElementById('reg-name').value; const phone = document.getElementById('reg-phone').value;
+        if(!name || !phone) { alert(currentLang === 'en' ? "Please fill all fields" : "請填寫完整資訊"); return; }
+        alert(currentLang === 'en' ? "Registration Successful!" : "會員註冊成功！");
+        document.getElementById('buyer-name').value = name; document.getElementById('buyer-phone').value = phone;
+        closeAuthModal();
+    }
+
+    function handleLogin() {
+        const acc = document.getElementById('login-acc').value; const pwd = document.getElementById('login-pwd').value;
+        if (acc === 'admin' && pwd === '1234') {
+            document.getElementById('auth-modal').style.display = 'none'; document.getElementById('admin-view').classList.remove('hidden');
+            initAdminDashboard(); 
         } else {
-            root.style.setProperty('--bg', '#F2F2F7'); root.style.setProperty('--card', '#FFFFFF');
-            root.style.setProperty('--text', '#1C1C1E'); root.style.setProperty('--secondary', '#8E8E93'); root.style.setProperty('--border', '#E5E5EA');
-        }
-        let pColor, pTint;
-        if (config.accent === 'orange') { pColor = '#FF9500'; pTint = 'rgba(255,149,0,0.15)'; }
-        else if (config.accent === 'mono') { pColor = config.baseTheme==='dark'?'#E5E5EA':'#333333'; pTint = config.baseTheme==='dark'?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.05)'; }
-        else if (config.accent === 'gray') { pColor = '#8E8E93'; pTint = 'rgba(142,142,147,0.15)'; }
-        else { pColor = '#007AFF'; pTint = 'rgba(0,122,255,0.1)'; } 
-        root.style.setProperty('--primary', pColor); root.style.setProperty('--tint', pTint);
-    }
-
-    function updateStaticText() {
-        document.getElementById('page-title').innerText = config.title; document.getElementById('display-trip-title').innerText = config.title;
-        document.getElementById('tab-itinerary').innerText = t('itinerary'); document.getElementById('tab-overview').innerText = t('overview');
-        document.getElementById('lbl-settings-title').innerText = t('settingsTitle'); document.getElementById('lbl-lang').innerText = t('lang');
-        document.getElementById('lbl-base-theme').innerText = t('baseTheme'); document.getElementById('lbl-accent').innerText = t('accent');
-        document.getElementById('lbl-trip-name').innerText = t('tripName'); document.getElementById('lbl-start-date').innerText = t('startDate');
-        document.getElementById('lbl-base-curr').innerText = t('baseCurr'); document.getElementById('lbl-target-curr').innerText = t('targetCurr');
-        document.getElementById('lbl-rate').innerText = t('rate'); document.getElementById('lbl-day-mgt').innerText = t('dayMgt');
-        document.getElementById('btn-add-day').innerText = t('addDay'); document.getElementById('btn-save-settings').innerText = t('saveSettings');
-        document.getElementById('btn-cancel-settings').innerText = t('cancel');
-
-        let themeOpts = document.getElementById('cfg-base-theme').options; themeOpts[0].text = t('light'); themeOpts[1].text = t('dark');
-        let accOpts = document.getElementById('cfg-accent').options; accOpts[0].text = t('blue'); accOpts[1].text = t('orange'); accOpts[2].text = t('mono'); accOpts[3].text = t('gray');
-    }
-
-    function applyTranslation(fromUI = false) {
-        if (fromUI) config.lang = document.getElementById('cfg-lang').value;
-        updateStaticText();
-        if (fromUI) render(); 
-    }
-
-    function toggleEditMode() {
-        isEditMode = !isEditMode; editTarget = null; 
-        const fab = document.getElementById('fab-edit');
-        if (isEditMode) { fab.style.backgroundColor = 'var(--red)'; document.getElementById('icon-pencil').style.display = 'none'; document.getElementById('icon-close').style.display = 'block'; } 
-        else { fab.style.backgroundColor = 'var(--primary)'; document.getElementById('icon-pencil').style.display = 'block'; document.getElementById('icon-close').style.display = 'none'; }
-        renderView();
-    }
-
-    // --- 2. V88 全新行程陣列庫 (使用者指定版) ---
-    const initialData = [
-        { day: 1, summary: "名古屋", steps: 0, items: [
-            { id: "s1_1", type: "spot", time: "15:30", name: "中部國際機場", cat: "交通點", cost: 0, lat: 34.8584, lng: 136.8054, memo: "營業時間：全天", img: "https://placehold.co/150?text=Airport", completed: false },
-            { id: "t1_2", type: "train", name: "名鐵", no: "機場線", from: "NGO", to: "名古屋", time: "16:10", seat: "自由席", cost: 1250, lat: 34.8584, lng: 136.8054, memo: "約28分到名古屋", completed: false },
-            { id: "s1_3", type: "spot", time: "17:30", name: "名古屋市科學館", cat: "科學館", cost: 800, lat: 35.1652, lng: 136.8997, memo: "營業時間 09:30–17:00（若太晚改隔天）", img: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150", completed: false },
-            { id: "s1_4", type: "spot", time: "19:00", name: "名古屋晚餐", cat: "美食", cost: 2000, lat: 35.1709, lng: 136.8815, memo: "名古屋名物", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s1_5", type: "spot", time: "20:30", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 2, summary: "高山＋白川鄉", steps: 0, items: [
-            { id: "s2_1", type: "spot", time: "07:45", name: "名古屋站", cat: "交通點", cost: 0, lat: 35.1709, lng: 136.8815, memo: "準備搭乘JR", img: "https://placehold.co/150?text=Station", completed: false },
-            { id: "t2_2", type: "train", name: "JR特急", no: "飛驒", from: "名古屋", to: "高山", time: "08:00", seat: "指定席", cost: 6000, lat: 35.1709, lng: 136.8815, memo: "約2h20", completed: false },
-            { id: "s2_3", type: "spot", time: "10:20", name: "飛驒高山老街", cat: "觀光名勝", cost: 0, lat: 36.1424, lng: 137.2588, memo: "商店約9:00–17:00", img: "https://placehold.co/150?text=Takayama", completed: false },
-            { id: "t2_4", type: "subway", name: "濃飛巴士", no: "白川鄉線", from: "高山", to: "白川鄉", time: "13:00", seat: "自由席", cost: 2600, lat: 36.1415, lng: 137.2570, memo: "前往白川鄉", completed: false },
-            { id: "s2_5", type: "spot", time: "14:00", name: "白川鄉合掌村", cat: "自然景點", cost: 0, lat: 36.2585, lng: 136.9067, memo: "村落全天開放", img: "https://placehold.co/150?text=Shirakawa", completed: false },
-            { id: "t2_6", type: "subway", name: "濃飛巴士", no: "高山線", from: "白川鄉", to: "高山", time: "16:30", seat: "自由席", cost: 2600, lat: 36.2585, lng: 136.9067, memo: "返回高山", completed: false },
-            { id: "t2_7", type: "train", name: "JR特急", no: "飛驒", from: "高山", to: "名古屋", time: "18:00", seat: "指定席", cost: 6000, lat: 36.1415, lng: 137.2570, memo: "回名古屋", completed: false },
-            { id: "s2_8", type: "spot", time: "20:30", name: "名古屋晚餐", cat: "美食", cost: 2000, lat: 35.1709, lng: 136.8815, memo: "市區晚餐", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s2_9", type: "spot", time: "21:30", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 3, summary: "名古屋科技日", steps: 0, items: [
-            { id: "s3_1", type: "spot", time: "09:30", name: "豐田產業技術紀念館", cat: "博物館", cost: 500, lat: 35.1802, lng: 136.8767, memo: "營業時間 09:30–17:00", img: "https://images.unsplash.com/photo-1533106497176-45ae19e68ba2?w=150", completed: false },
-            { id: "s3_2", type: "spot", time: "13:00", name: "磁浮鐵道館", cat: "鐵路", cost: 1000, lat: 35.0506, lng: 136.8509, memo: "營業時間 10:00–17:30", img: "https://images.unsplash.com/photo-1532105956626-9569c03602f6?w=150", completed: false },
-            { id: "s3_3", type: "spot", time: "16:00", name: "諾力塔克之森", cat: "博物館", cost: 500, lat: 35.1784, lng: 136.8824, memo: "約10:00–18:00", img: "https://placehold.co/150?text=Noritake", completed: false },
-            { id: "s3_4", type: "spot", time: "19:00", name: "榮商圈晚餐", cat: "美食", cost: 2500, lat: 35.1683, lng: 136.9080, memo: "商圈晚餐", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s3_5", type: "spot", time: "21:00", name: "名古屋住宿", cat: "住宿", cost: 12000, lat: 35.1709, lng: 136.8815, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 4, summary: "航太日", steps: 0, items: [
-            { id: "s4_1", type: "spot", time: "09:30", name: "愛知飛行博物館", cat: "航太館", cost: 1000, lat: 35.2458, lng: 136.9242, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=MRJ", completed: false },
-            { id: "s4_2", type: "spot", time: "12:30", name: "午餐", cat: "美食", cost: 1500, lat: 35.2458, lng: 136.9242, memo: "博物館周邊或園區內", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s4_3", type: "spot", time: "14:00", name: "岐阜各務原航空宇宙博物館", cat: "航太館", cost: 800, lat: 35.3853, lng: 136.8533, memo: "營業時間 09:30–17:00", img: "https://placehold.co/150?text=Aero", completed: false },
-            { id: "t4_4", type: "train", name: "新幹線", no: "Hikari", from: "名古屋", to: "濱松", time: "18:00", seat: "自由席", cost: 4500, lat: 35.1709, lng: 136.8815, memo: "名古屋→濱松", completed: false },
-            { id: "s4_5", type: "spot", time: "19:30", name: "濱松住宿", cat: "住宿", cost: 10000, lat: 34.7037, lng: 137.7347, memo: "車站周邊", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 5, summary: "濱松", steps: 0, items: [
-            { id: "s5_1", type: "spot", time: "09:00", name: "航空自衛隊濱松廣報館", cat: "航太館", cost: 0, lat: 34.7431, lng: 137.6976, memo: "營業時間 09:00–16:00", img: "https://placehold.co/150?text=JASDF", completed: false },
-            { id: "s5_2", type: "spot", time: "12:00", name: "午餐", cat: "美食", cost: 1500, lat: 34.7431, lng: 137.6976, memo: "基地附近", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s5_3", type: "spot", time: "13:30", name: "濱松樂器博物館", cat: "博物館", cost: 800, lat: 34.7061, lng: 137.7345, memo: "營業時間 09:30–17:00", img: "https://placehold.co/150?text=Music", completed: false },
-            { id: "t5_4", type: "train", name: "JR", no: "信濃", from: "濱松", to: "松本", time: "16:30", seat: "指定席", cost: 5500, lat: 34.7037, lng: 137.7347, memo: "濱松→松本", completed: false },
-            { id: "s5_5", type: "spot", time: "20:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 6, summary: "松本", steps: 0, items: [
-            { id: "s6_1", type: "spot", time: "09:00", name: "松本城", cat: "觀光名勝", cost: 700, lat: 36.2388, lng: 137.9691, memo: "營業時間 08:30–17:00", img: "https://placehold.co/150?text=Castle", completed: false },
-            { id: "s6_2", type: "spot", time: "11:30", name: "午餐", cat: "美食", cost: 1500, lat: 36.2388, lng: 137.9691, memo: "城區附近", img: "https://placehold.co/150?text=Food", completed: false },
-            { id: "s6_3", type: "spot", time: "13:00", name: "松本市美術館", cat: "美術館", cost: 410, lat: 36.2312, lng: 137.9786, memo: "營業時間 09:00–17:00", img: "https://placehold.co/150?text=Art", completed: false },
-            { id: "s6_4", type: "spot", time: "15:30", name: "日本浮世繪博物館", cat: "博物館", cost: 1000, lat: 36.2335, lng: 137.9405, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Ukiyo", completed: false },
-            { id: "s6_5", type: "spot", time: "18:00", name: "松本住宿", cat: "住宿", cost: 11000, lat: 36.2331, lng: 137.9717, memo: "市區飯店", img: "https://placehold.co/150?text=Hotel", completed: false }
-        ]},
-        { day: 7, summary: "回名古屋", steps: 0, items: [
-            { id: "t7_1", type: "train", name: "JR特急信濃", no: "Shinano", from: "松本", to: "名古屋", time: "09:00", seat: "指定席", cost: 6000, lat: 36.2331, lng: 137.9717, memo: "松本→名古屋", completed: false },
-            { id: "s7_2", type: "spot", time: "11:30", name: "德川美術館", cat: "博物館", cost: 1400, lat: 35.1838, lng: 136.9332, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Tokugawa", completed: false },
-            { id: "s7_3", type: "spot", time: "14:00", name: "橫山美術館", cat: "美術館", cost: 1000, lat: 35.1738, lng: 136.9224, memo: "營業時間 10:00–17:00", img: "https://placehold.co/150?text=Art", completed: false },
-            { id: "t7_4", type: "flight", name: "EVA AIR", no: "BR197", from: "NGO", to: "TPE", time: "18:00", seat: "25A", cost: 0, lat: 34.8584, lng: 136.8054, memo: "返程", completed: false }
-        ]}
-    ];
-
-    let itinerary = safeParse('v88_data', initialData);
-    if (!Array.isArray(itinerary) || itinerary.length === 0) { itinerary = JSON.parse(JSON.stringify(initialData)); }
-    itinerary.forEach(d => { if(!d.items) d.items = []; if(typeof d.steps !== 'number') d.steps = 0; });
-
-    window.onload = () => {
-        document.getElementById('cfg-lang').value = config.lang; document.getElementById('cfg-base-theme').value = config.baseTheme; document.getElementById('cfg-accent').value = config.accent;
-        applyTheme(); updateStaticText(); initMap();
-    };
-
-    // --- 3. 地圖處理 ---
-    function initMap() {
-        map = L.map('map', { zoomControl: false }).setView([35.1652, 136.8997], 10);
-        const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 });
-        const googleSat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20 });
-        const osmNormal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
-        const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
-
-        const baseMaps = { "Satellite+Labels": googleHybrid, "Satellite": googleSat, "Normal": osmNormal, "Light": cartoLight };
-        googleHybrid.addTo(map); 
-        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
-        pathLine = L.polyline([], { color: 'var(--primary)', weight: 4, opacity: 0.8, dashArray: '10, 10' }).addTo(map);
-        render();
-    }
-
-    function focusSpot(la, ln) {
-        let nLat = parseFloat(la); let nLng = parseFloat(ln);
-        if(isNaN(nLat) || isNaN(nLng) || (nLat === 0 && nLng === 0)) return;
-        map.flyTo([nLat, nLng], 15, { animate: true, duration: 0.5 });
-        if(isExpanded) toggleExpand();
-    }
-
-    function updateMapPath() {
-        mapMarkers.forEach(m => map.removeLayer(m)); mapMarkers = [];
-        let pts = [];
-
-        try {
-            if (currentTab === 'overview') {
-                itinerary.forEach(d => {
-                    let itemIdx = 1;
-                    (d.items || []).forEach(item => {
-                        let sLat = parseFloat(item.lat); let sLng = parseFloat(item.lng);
-                        if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: item.name || item.from, index: `D${d.day}-${itemIdx}` }); itemIdx++; }
-                    });
-                });
-            } else {
-                if(!itinerary[curIdx]) return;
-                const d = itinerary[curIdx];
-                let itemIdx = 1;
-                (d.items || []).forEach(item => {
-                    let sLat = parseFloat(item.lat); let sLng = parseFloat(item.lng);
-                    if(!isNaN(sLat) && sLat !== 0) { pts.push({ lat: sLat, lng: sLng, title: item.name || item.from, index: itemIdx }); itemIdx++; }
-                });
-            }
-
-            const latlngs = pts.map(p => [p.lat, p.lng]);
-            pathLine.setLatLngs(latlngs);
-            
-            pts.forEach(p => {
-                let iconHtml = `<div class="map-marker-num">${p.index}</div>`;
-                const icon = L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [36, 24], iconAnchor: [18, 12] });
-                const m = L.marker([p.lat, p.lng], { icon: icon }).bindPopup(p.title).addTo(map);
-                mapMarkers.push(m);
-            });
-
-            if (latlngs.length > 1) map.fitBounds(pathLine.getBounds(), { padding: [40, 40] });
-            else if (latlngs.length === 1) map.setView(latlngs[0], 14);
-        } catch (e) { console.error("Map Error:", e); }
-    }
-
-    // --- 4. UI 渲染 ---
-    function sortItemsByTime() {
-        if(itinerary[curIdx].items) itinerary[curIdx].items.sort((a,b)=> String(a.time||'').localeCompare(String(b.time||'')));
-        save(); render();
-    }
-
-    function render() {
-        document.getElementById('day-bar').innerHTML = itinerary.map((d, i) => `<button class="day-pill ${i===curIdx?'active':''}" onclick="curIdx=${i}; editTarget=null; render();">D${d.day}</button>`).join('');
-        updateMapPath(); renderView();
-        document.getElementById('fab-settings').style.display = (currentTab === 'overview') ? 'flex' : 'none';
-        document.getElementById('fab-edit').style.display = (currentTab === 'itinerary') ? 'flex' : 'none';
-    }
-
-    function toggleComplete(idx) {
-        itinerary[curIdx].items[idx].completed = !itinerary[curIdx].items[idx].completed;
-        save(); renderView();
-    }
-
-    function renderView() {
-        const port = document.getElementById('view-port');
-        try {
-            const d = itinerary[curIdx];
-            if(!d) return;
-            let currentDateStr = window.getDayDate(d.day);
-            const catOpts = i18n[config.lang]['cats'];
-            
-            if (currentTab === 'itinerary') {
-                let html = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="font-weight:700; color:var(--primary); font-size:15px;">Day ${d.day} (${currentDateStr})：${d.summary}</div>
-                    ${isEditMode ? `<button class="btn-action" style="min-height:28px; padding:0 10px; font-size:11px; background:var(--tint);" onclick="sortItemsByTime()">${t('sortByTime')}</button>` : ''}
-                </div>`;
-                
-                if (isEditMode) {
-                    html += `
-                    <div class="card" style="flex-direction:column; background:var(--tint); border:1px solid var(--border); cursor:default;">
-                        <div style="font-weight:800; margin-bottom:8px; color:var(--primary);">${t('quickExpense')}</div>
-                        <div class="input-row" style="margin-bottom:8px;">
-                            <select id="ex-cat" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
-                            <input id="ex-jpy" type="number" class="ios-input" placeholder="${config.baseCurr}" style="flex:2;">
-                        </div>
-                        <input id="ex-note" class="ios-input" placeholder="${t('expNote')}" style="margin-bottom:8px;">
-                        <button class="btn-action btn-save" style="margin-top:0;" onclick="addEx()">${t('save')}</button>
-                    </div>`;
-                }
-                
-                html += `<div id="items-container">`;
-                let displayIdx = 1; 
-                
-                html += (d.items || []).map((item, idx) => {
-                    let isComp = item.completed;
-                    
-                    if (item.type !== 'spot') {
-                        if (editTarget === idx && isEditMode) {
-                            return `
-                            <div class="inline-edit-box" style="margin-bottom:12px;">
-                                <div class="input-label">${t('ticketType')}</div>
-                                <select id="edit-type-${idx}" class="ios-input" style="margin-bottom:8px;">
-                                    <option value="flight" ${item.type==='flight'?'selected':''}>${t('flight')}</option>
-                                    <option value="train" ${item.type==='train'?'selected':''}>${t('train')}</option>
-                                    <option value="subway" ${item.type==='subway'?'selected':''}>${t('subway')}</option>
-                                </select>
-                                <div class="input-label">${t('flightAndNo')}</div>
-                                <div class="input-row"><input id="edit-name-${idx}" class="ios-input" value="${item.name}"><input id="edit-no-${idx}" class="ios-input" value="${item.no}"></div>
-                                <div class="input-label">${t('locLatLng')}</div>
-                                <div class="input-row"><input id="edit-lat-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lat||''}"><input id="edit-lng-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lng||''}"></div>
-                                <div class="input-label">${t('routeTime')}</div>
-                                <div class="input-row"><input id="edit-from-${idx}" class="ios-input" value="${item.from}"><input id="edit-to-${idx}" class="ios-input" value="${item.to}"><input id="edit-time-${idx}" class="ios-input" value="${item.time}"></div>
-                                <div class="input-label">${t('seatCost')} (${config.targetCurr})</div>
-                                <div class="input-row"><input id="edit-seat-${idx}" class="ios-input" value="${item.seat}"><input id="edit-cost-${idx}" type="number" class="ios-input" value="${item.cost}"></div>
-                                
-                                <button class="btn-action btn-save" onclick="saveItem(${idx}, 'ticket')">${t('save')}</button>
-                                <button class="btn-action btn-del" onclick="deleteItem(${idx})">${t('delete')}</button>
-                            </div>`;
-                        } else {
-                            let editBtnHtml = isEditMode ? `
-                                <button class="btn-action" style="margin-top:8px; height:28px; font-size:11px;" onclick="event.stopPropagation(); editTarget=${idx}; renderView();">${t('edit')}</button>
-                                <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="margin-top:4px; height:28px; font-size:11px;" onclick="event.stopPropagation(); toggleComplete(${idx})">${isComp ? t('markIncomplete') : t('markComplete')}</button>
-                            ` : '';
-                            
-                            let uiClass = 'bp-plane'; let uiTag = 'FLIGHT';
-                            if (item.type === 'train') { uiClass = 'bp-train'; uiTag = 'TRAIN'; }
-                            else if (item.type === 'subway') { uiClass = 'bp-subway'; uiTag = 'TRANSIT'; }
-                            
-                            let curDisplayIdx = item.lat ? displayIdx++ : '-';
-
-                            return `
-                            <div class="boarding-pass ${uiClass} ${isComp?'completed':''}" onclick="focusSpot('${item.lat}', '${item.lng}')">
-                                <div class="bp-main">
-                                    <div class="bp-main-title" style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px; display:flex; justify-content:space-between;">
-                                        <span>${item.name}</span>
-                                        ${item.lat ? `<span style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">#${curDisplayIdx}</span>` : ''}
-                                    </div>
-                                    <div class="bp-route"><div class="bp-code" style="font-size:22px;">${item.from}</div><div style="flex:1; text-align:center; color:var(--secondary); font-size:12px; font-weight:bold; letter-spacing:1px;">${uiTag}</div><div class="bp-code" style="font-size:22px;">${item.to}</div></div>
-                                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
-                                        <div><b>${item.no}</b> | ${item.time}</div>
-                                        <div style="color:var(--primary); font-weight:bold;">${item.cost} ${config.targetCurr}</div>
-                                    </div>
-                                </div>
-                                <div class="bp-stub">
-                                    <span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${item.seat}</div>
-                                    ${editBtnHtml}
-                                </div>
-                                ${isEditMode ? `<div class="drag-handle" onclick="event.stopPropagation()">≡</div>` : ''}
-                            </div>`;
-                        }
-                    } else {
-                        if (editTarget === idx && isEditMode) {
-                            return `
-                            <div class="card" style="padding:0; border:none; box-shadow:none;">
-                                <div class="inline-edit-box" onclick="event.stopPropagation()">
-                                    <div class="input-row"><input id="edit-time-${idx}" class="ios-input" value="${item.time}" style="width:80px;" placeholder="${t('time')}"><input id="edit-name-${idx}" class="ios-input" value="${item.name}" style="flex:1;" placeholder="${t('name')}"></div>
-                                    <div class="input-row">
-                                        <select id="edit-cat-${idx}" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}" ${c===item.cat?'selected':''}>${c}</option>`).join('')}</select>
-                                        <input id="edit-cost-${idx}" type="number" class="ios-input" value="${item.cost}" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
-                                    </div>
-                                    <div class="input-row"><input id="edit-lat-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lat}" placeholder="${t('lat')}"><input id="edit-lng-${idx}" type="number" step="0.0001" class="ios-input" value="${item.lng}" placeholder="${t('lng')}"></div>
-                                    <input id="edit-img-${idx}" class="ios-input" value="${item.img}" placeholder="${t('imgUrl')}" style="margin-bottom:8px;">
-                                    <textarea id="edit-memo-${idx}" class="ios-input" style="height:60px;" placeholder="${t('memo')}">${item.memo}</textarea>
-                                    <button class="btn-action btn-save" onclick="saveItem(${idx}, 'spot')">${t('save')}</button>
-                                    <button class="btn-action btn-del" onclick="deleteItem(${idx})">${t('delete')}</button>
-                                </div>
-                            </div>`;
-                        } else {
-                            let curDisplayIdx = item.lat ? displayIdx++ : '-';
-                            let thumbHtml = item.img.startsWith('http') ? `<img src="${item.img}" class="spot-thumb">` : `<div class="spot-thumb">${curDisplayIdx}</div>`;
-                            let editBtnHtml = isEditMode ? `
-                                <div class="input-row" style="margin-top:8px;">
-                                    <button class="btn-action ${isComp?'btn-incomplete':'btn-complete'}" style="flex:1;" onclick="event.stopPropagation(); toggleComplete(${idx});">${isComp ? t('markIncomplete') : t('markComplete')}</button>
-                                    <button class="btn-action" style="flex:1; border:1px solid var(--border);" onclick="event.stopPropagation(); editTarget=${idx}; renderView();">${t('edit')}</button>
-                                </div>
-                            ` : '';
-                            
-                            let mapBtnHtml = `<a href="http://googleusercontent.com/maps.google.com/?q=${encodeURIComponent(item.name)}" target="_blank" class="btn-map" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> ${t('mapBtn')}</a>`;
-
-                            return `
-                            <div class="card ${isComp?'completed':''}" onclick="focusSpot('${item.lat}', '${item.lng}')">
-                                ${thumbHtml}
-                                <div class="spot-info">
-                                    <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${curDisplayIdx}.</span> ${item.time} ${item.name}</span></div>
-                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                        <div class="cat-tag">${item.cat || '...'}</div>
-                                        ${mapBtnHtml}
-                                    </div>
-                                    <div class="spot-memo">${item.memo}</div>
-                                    <div class="cost-row"><span>${item.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(item.cost*config.rate)} ${config.targetCurr})</span></div>
-                                    ${editBtnHtml}
-                                </div>
-                                ${isEditMode ? `<div class="drag-handle" onclick="event.stopPropagation()">≡</div>` : ''}
-                            </div>`;
-                        }
-                    }
-                }).join('');
-                html += `</div>`;
-
-                if (isEditMode) {
-                    html += `
-                    <div style="display:flex; gap:10px; margin-top:20px;">
-                        <button class="btn-action" style="flex:1; border:1px dashed var(--border);" onclick="addTicketUI()">+ ${t('addTicket')}</button>
-                    </div>
-                    <div class="card" style="flex-direction:column; background:var(--bg); border:1px dashed var(--border); margin-top:12px; cursor:default;">
-                        <div style="font-weight:700; margin-bottom:8px;">+ ${t('addSpot')}</div>
-                        <div class="input-row"><input id="new-time" class="ios-input" placeholder="${t('time')}" style="width:80px;"><input id="new-name" class="ios-input" placeholder="${t('name')}" style="flex:1;"></div>
-                        <div class="input-row">
-                            <select id="new-cat" class="ios-input" style="flex:1; padding:0 5px;">${catOpts.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
-                            <input id="new-cost" type="number" class="ios-input" placeholder="${t('amount')} ${config.baseCurr}" style="flex:1;">
-                        </div>
-                        <div class="input-row"><input id="new-lat" type="number" step="0.0001" class="ios-input" placeholder="${t('lat')}"><input id="new-lng" type="number" step="0.0001" class="ios-input" placeholder="${t('lng')}"></div>
-                        <input id="new-memo" class="ios-input" placeholder="${t('memo')}" style="margin-top:8px;">
-                        <button class="btn-action btn-save" onclick="addSpot()">${t('save')}</button>
-                    </div>`;
-                }
-                
-                port.innerHTML = html;
-
-                setTimeout(() => {
-                    if(isEditMode && typeof Sortable !== 'undefined') {
-                        let container = document.getElementById('items-container');
-                        if(container) {
-                            Sortable.create(container, {
-                                handle: '.drag-handle', animation: 150, ghostClass: 'sortable-ghost',
-                                onEnd: function(evt) {
-                                    let arr = itinerary[curIdx].items;
-                                    let item = arr.splice(evt.oldIndex, 1)[0];
-                                    arr.splice(evt.newIndex, 0, item);
-                                    save(); updateMapPath(); renderView();
-                                }
-                            });
-                        }
-                    }
-                }, 50);
-
-            } else if (currentTab === 'overview') {
-                renderOverview(port);
-            }
-        } catch (error) {
-            console.error(error);
-            port.innerHTML = `<div style="padding:20px; color:var(--red);">UI Error: ${error.message}<br><button class="btn-action" style="margin-top:10px;" onclick="localStorage.clear(); location.reload();">Reset</button></div>`;
+            alert(currentLang === 'en' ? "Invalid credentials. Try Guest Access." : "帳密錯誤，請檢查或使用訪客登入。");
         }
     }
 
-    // --- CRUD Unified ---
-    function saveItem(idx, type) {
-        const item = itinerary[curIdx].items[idx]; 
-        item.type = type === 'spot' ? 'spot' : document.getElementById(`edit-type-${idx}`).value;
-        item.time = document.getElementById(`edit-time-${idx}`).value;
-        
-        if (type === 'spot') {
-            item.name = document.getElementById(`edit-name-${idx}`).value;
-            item.cat = document.getElementById(`edit-cat-${idx}`).value;
-            item.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0;
-            item.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0;
-            item.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0;
-            item.img = document.getElementById(`edit-img-${idx}`).value;
-            item.memo = document.getElementById(`edit-memo-${idx}`).value;
-        } else {
-            item.name = document.getElementById(`edit-name-${idx}`).value;
-            item.no = document.getElementById(`edit-no-${idx}`).value;
-            item.from = document.getElementById(`edit-from-${idx}`).value;
-            item.to = document.getElementById(`edit-to-${idx}`).value;
-            item.seat = document.getElementById(`edit-seat-${idx}`).value;
-            item.cost = parseInt(document.getElementById(`edit-cost-${idx}`).value) || 0;
-            item.lat = parseFloat(document.getElementById(`edit-lat-${idx}`).value) || 0;
-            item.lng = parseFloat(document.getElementById(`edit-lng-${idx}`).value) || 0;
-        }
-        editTarget = null; save(); render();
+    function animateValue(obj, start, end, duration) {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            obj.innerHTML = Math.floor(progress * (end - start) + start).toLocaleString();
+            if (progress < 1) window.requestAnimationFrame(step);
+        };
+        window.requestAnimationFrame(step);
     }
 
-    function addTicketUI() { 
-        itinerary[curIdx].items.push({ id: "t_" + Date.now(), type: "flight", name: "COMPANY", no: "000", from: "AAA", to: "BBB", time: "12:00", seat: "1A", cost: 0, lat: 0, lng: 0, completed: false });
-        editTarget = itinerary[curIdx].items.length - 1; save(); render(); 
+    // ==========================================
+    // 3. 戰情室控制 (Tab 切換與模擬引擎)
+    // ==========================================
+    function switchAdminTab(panelId) {
+        document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById(`btn-nav-${panelId}`).classList.add('active');
+        document.getElementById(`panel-${panelId}`).classList.add('active');
     }
 
-    function addSpot() {
-        const name = document.getElementById('new-name').value; if(!name) return;
-        itinerary[curIdx].items.push({ id: Date.now(), type: 'spot', name, time: document.getElementById('new-time').value || "12:00", cat: document.getElementById('new-cat').value, cost: parseInt(document.getElementById('new-cost').value) || 0, img: "https://placehold.co/150", lat: parseFloat(document.getElementById('new-lat').value) || 0, lng: parseFloat(document.getElementById('new-lng').value) || 0, memo: document.getElementById('new-memo').value, completed: false });
-        save(); render();
-    }
+    let mockMembers = [];
+    let mockOrdersData = [];
 
-    function deleteItem(idx) { itinerary[curIdx].items.splice(idx,1); editTarget=null; save(); render(); }
-    
-    function addEx() {
-        const jpy = parseInt(document.getElementById('ex-jpy').value), note = document.getElementById('ex-note').value, cat = document.getElementById('ex-cat').value;
-        if(!jpy) return; extras.push({ day: itinerary[curIdx].day, jpy, note: note || cat, category: cat }); save(); renderView();
-    }
+    function initAdminDashboard() {
+        Chart.defaults.color = 'rgba(255, 255, 255, 0.7)'; Chart.defaults.font.family = "'Montserrat', 'Noto Sans TC', sans-serif";
 
-    // --- 5. 總覽與圖表 ---
-    function renderOverview(port) {
-        let spotBase = 0; let expDataObj = {}; let catCountObj = {}; 
-        let totalItems = 0; let completedItems = 0;
-        const catOpts = i18n[config.lang]['cats'];
-        catOpts.forEach(c => { expDataObj[c] = 0; catCountObj[c] = 0; });
-        
-        let expenseTableHtml = `
-            <table class="expense-table" style="margin-bottom:15px; width:100%;">
-                <thead><tr><th>${t('item')}</th><th style="text-align:right;">${config.baseCurr}</th><th style="text-align:right;">${config.targetCurr}</th></tr></thead>
-                <tbody>
-        `;
+        // 產生 50 筆模擬會員資料
+        mockMembers = Array.from({length: 50}, (_, i) => ({
+            id: `USR-${String(i+1).padStart(3,'0')}`,
+            age: Math.floor(Math.random() * 42) + 18,
+            gender: Math.random() > 0.4 ? 'Male' : 'Female',
+            source: ['Social Media', 'Word of Mouth', 'Organic Search', 'Ads'][Math.floor(Math.random() * 4)],
+            orders: Math.floor(Math.random() * 15) + 1,
+            spent: Math.floor(Math.random() * 45000) + 5000
+        }));
 
-        let allSpotsHtml = itinerary.map(d => {
-            let dExtra = extras.filter(e => e.day === d.day);
-            let dateStr = window.getDayDate(d.day);
-            
-            let dayExpHtml = ''; let dayHasExpense = false;
-            let cardHtml = `<div style="margin-top:20px; font-weight:800; font-size:16px; color:var(--primary); border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:12px;">Day ${d.day} (${dateStr}) - ${d.summary}</div>`;
+        // 產生模擬訂單資料 (接單看板使用)
+        mockOrdersData = Array.from({length: 15}, (_, i) => ({
+            oId: `ORD-${Math.random().toString(36).toUpperCase().substring(2, 6)}-${String(i+1).padStart(3,'0')}`,
+            date: `2024-04-${String(Math.floor(Math.random()*28)+1).padStart(2,'0')}`,
+            items: `${['A0','A1','A2','A3','A4'][Math.floor(Math.random()*5)]} Print (*${Math.floor(Math.random()*5)+1})`,
+            amount: Math.floor(Math.random()*5000)+500,
+            status: Math.random() > 0.3 ? 'done' : 'pending'
+        }));
 
-            let itemIdx = 1;
-            (d.items || []).forEach(item => {
-                totalItems++; if(item.completed) completedItems++;
-                
-                if (item.type !== 'spot') {
-                    let tCat = item.type === 'flight' ? catOpts[11] : (item.type === 'train' ? catOpts[1] : catOpts[5]); 
-                    expDataObj[tCat] = (expDataObj[tCat]||0) + Math.round(item.cost / config.rate); 
-                    
-                    dayExpHtml += `<tr><td>[${tCat}] ${item.no}</td><td style="text-align:right;">-</td><td style="text-align:right;">${item.cost}</td></tr>`;
-                    dayHasExpense = true;
-                    
-                    let uiTag = item.type === 'train' ? 'TRAIN' : (item.type === 'subway' ? 'TRANSIT' : 'FLIGHT');
-                    let uiClass = item.type === 'train' ? 'bp-train' : (item.type === 'subway' ? 'bp-subway' : 'bp-plane');
-                    let curDisplayIdx = item.lat ? itemIdx++ : '-';
+        const totalRevenue = mockMembers.reduce((sum, m) => sum + m.spent, 0);
+        const totalCost = totalRevenue * 0.58; const netProfit = totalRevenue - totalCost;
 
-                    cardHtml += `
-                        <div class="boarding-pass ${uiClass}" style="cursor:default;">
-                            <div class="bp-main">
-                                <div class="bp-main-title" style="font-size:10px; font-weight:800; color:var(--primary); margin-bottom:4px; display:flex; justify-content:space-between;">
-                                    <span>${item.name}</span>
-                                    ${item.lat ? `<span style="background:var(--primary); color:white; padding:2px 6px; border-radius:4px;">#${curDisplayIdx}</span>` : ''}
-                                </div>
-                                <div class="bp-route"><div class="bp-code" style="font-size:22px;">${item.from}</div><div style="flex:1; text-align:center; color:var(--secondary); font-size:12px; font-weight:bold; letter-spacing:1px;">${uiTag}</div><div class="bp-code" style="font-size:22px;">${item.to}</div></div>
-                                <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:8px;">
-                                    <div><b>${item.no}</b> | ${item.time}</div>
-                                    <div style="color:var(--primary); font-weight:bold;">${item.cost} ${config.targetCurr}</div>
-                                </div>
-                            </div>
-                            <div class="bp-stub"><span style="font-size:10px; color:var(--secondary);">SEAT</span><div style="font-size:20px; font-weight:900;">${item.seat}</div></div>
-                        </div>`;
-                } else {
-                    spotBase += item.cost;
-                    if(expDataObj[item.cat] !== undefined) expDataObj[item.cat] += item.cost;
-                    if(catCountObj[item.cat] !== undefined) catCountObj[item.cat] += 1;
-                    
-                    if(item.cost > 0) {
-                        dayExpHtml += `<tr><td>[${item.cat}] ${item.name}</td><td style="text-align:right;">${item.cost}</td><td style="text-align:right;">${Math.round(item.cost*config.rate)}</td></tr>`;
-                        dayHasExpense = true;
-                    }
-                    
-                    let curDisplayIdx = item.lat ? itemIdx++ : '-';
-                    let thumbHtml = item.img.startsWith('http') ? `<img src="${item.img}" class="spot-thumb">` : `<div class="spot-thumb">${curDisplayIdx}</div>`;
-                    cardHtml += `
-                    <div class="card" style="cursor:default;">
-                        ${thumbHtml}
-                        <div class="spot-info">
-                            <div class="spot-title"><span><span style="color:var(--primary); margin-right:4px;">${curDisplayIdx}.</span> ${item.time} ${item.name}</span></div>
-                            <div class="cat-tag" style="display:inline-block; margin-bottom:6px;">${item.cat || '...'}</div>
-                            <div class="spot-memo">${item.memo}</div>
-                            <div class="cost-row"><span>${item.cost} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(item.cost*config.rate)} ${config.targetCurr})</span></div>
-                        </div>
-                    </div>`;
-                }
-            });
+        animateValue(document.getElementById('dash-rev'), 0, totalRevenue, 1000);
+        animateValue(document.getElementById('dash-cost'), 0, totalCost, 1000);
+        animateValue(document.getElementById('dash-profit'), 0, netProfit, 1000);
 
-            dExtra.forEach(e => {
-                dayExpHtml += `<tr style="color:var(--secondary);"><td>[${e.category}] ${e.note}</td><td style="text-align:right;">${e.jpy}</td><td style="text-align:right;">${Math.round(e.jpy*config.rate)}</td></tr>`;
-                dayHasExpense = true;
-                cardHtml += `
-                <div class="card" style="cursor:default; align-items:center;">
-                    <div style="width:40px; height:40px; border-radius:12px; background:var(--tint); display:flex; align-items:center; justify-content:center; color:var(--primary); font-weight:bold; font-size:20px; flex-shrink:0;">$</div>
-                    <div class="spot-info">
-                        <div class="spot-title"><span style="color:var(--text);">${e.note}</span></div>
-                        <div class="cat-tag" style="display:inline-block;">${e.category}</div>
-                        <div class="cost-row" style="color:var(--red); margin-top:6px;"><span>${e.jpy} ${config.baseCurr}</span> <span style="color:var(--secondary); font-weight:normal; font-size:11px;">(${Math.round(e.jpy*config.rate)} ${config.targetCurr})</span></div>
-                    </div>
-                </div>`;
-            });
-
-            if (dayHasExpense) { expenseTableHtml += `<tr class="expense-day-row"><td colspan="3">Day ${d.day}</td></tr>` + dayExpHtml; }
-            return cardHtml;
-        }).join('');
-        
-        expenseTableHtml += `</tbody></table>`;
-
-        let extraBase = 0;
-        extras.forEach(e => {
-            extraBase += e.jpy;
-            if(expDataObj[e.category] !== undefined) expDataObj[e.category] += e.jpy;
+        // 新增：商品歷史售出量長條圖 (A0 - A4)
+        const salesData = [120, 350, 420, 890, 1500]; // 模擬 A0, A1, A2, A3, A4 銷量
+        new Chart(document.getElementById('salesChart'), {
+            type: 'bar',
+            data: { labels: ['A0 Massive', 'A1 Poster', 'A2 Display', 'A3 Wide', 'A4 Standard'],
+                    datasets: [{ label: 'Units Sold', data: salesData, backgroundColor: '#00e5ff', borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
         });
 
-        let ticketTarget = itinerary.reduce((sum, d) => sum + (d.items||[]).reduce((ts, item)=> item.type!=='spot' ? ts+item.cost : ts, 0), 0);
-        let totalBase = spotBase + extraBase;
-        let totalTarget = Math.round(totalBase * config.rate) + ticketTarget;
+        // 圓餅圖與年齡分布圖
+        const sourceCount = {}; mockMembers.forEach(m => { sourceCount[m.source] = (sourceCount[m.source] || 0) + 1; });
+        new Chart(document.getElementById('sourceChart'), {
+            type: 'doughnut',
+            data: { labels: Object.keys(sourceCount), datasets: [{ data: Object.values(sourceCount), backgroundColor: ['#00e5ff', '#ff007f', '#7000ff', '#ffffff88'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+        });
 
-        let expLabels = [], expData = [];
-        for (const [k, v] of Object.entries(expDataObj)) { if (v > 0) { expLabels.push(k); expData.push(Math.round(v * config.rate)); } }
+        const ageGroups = { '18-25':0, '26-35':0, '36-45':0, '46+':0 };
+        mockMembers.forEach(m => { if(m.age <= 25) ageGroups['18-25']++; else if(m.age <= 35) ageGroups['26-35']++; else if(m.age <= 45) ageGroups['36-45']++; else ageGroups['46+']++; });
+        new Chart(document.getElementById('ageChart'), {
+            type: 'bar', indexAxis: 'y', // 橫向長條圖
+            data: { labels: Object.keys(ageGroups), datasets: [{ data: Object.values(ageGroups), backgroundColor: '#ff007f', borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
 
-        let catLabels = [], catData = [];
-        for (const [k, v] of Object.entries(catCountObj)) { if (v > 0) { catLabels.push(k); catData.push(v); } }
+        renderMockTables();
+    }
 
-        let stepsLabels = itinerary.map(d => `D${d.day}`);
-        let stepsData = itinerary.map(d => d.steps || 0);
+    function renderMockTables() {
+        // 渲染會員表
+        const mBody = document.getElementById('member-table-body'); mBody.innerHTML = '';
+        mockMembers.forEach(m => {
+            let genderText = m.gender === 'Male' ? (currentLang==='en'?'Male':'男') : (currentLang==='en'?'Female':'女');
+            mBody.innerHTML += `<tr><td>${m.id}</td><td>${m.age}</td><td>${genderText}</td><td>${m.source}</td><td>${m.orders}</td><td>NT$ ${m.spent.toLocaleString()}</td></tr>`;
+        });
 
-        let tripSummaryHtml = `
-            <div class="overview-panel">
-                <h4 style="margin:0 0 15px 0;">${t('tripSummary')}</h4>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    ${itinerary.map(d => `
-                        <div style="display:flex; align-items:center; font-size:13px; line-height:1.4;">
-                            <div style="background:var(--tint); color:var(--primary); font-weight:bold; padding:4px 8px; border-radius:6px; margin-right:12px; min-width:40px; text-align:center;">D${d.day}</div>
-                            <div style="flex:1;">
-                                <div style="font-weight:700; color:var(--text);">${d.summary}</div>
-                                <div style="font-size:11px; color:var(--secondary);">${window.getDayDate(d.day)}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
+        // 渲染訂單表
+        const oBody = document.getElementById('order-table-body'); oBody.innerHTML = '';
+        mockOrdersData.forEach(o => {
+            let statClass = o.status === 'pending' ? 'badge-pending' : 'badge-done';
+            let statText = o.status === 'pending' ? dict[currentLang].statPending : dict[currentLang].statDone;
+            oBody.innerHTML += `<tr><td><span style="font-family:monospace; color:var(--accent);">${o.oId}</span></td><td>${o.date}</td><td>${o.items}</td><td>NT$ ${o.amount.toLocaleString()}</td><td><span class="badge ${statClass}">${statText}</span></td></tr>`;
+        });
+    }
 
-        port.innerHTML = `
-            <div class="page-break">
-                <div class="overview-panel" style="background:var(--primary); color:white; border:none;">
-                    <div style="font-size:13px; opacity:0.9;">${t('totalCost')}</div>
-                    <div style="font-size:32px; font-weight:800; margin:4px 0;">${totalTarget.toLocaleString()} ${config.targetCurr}</div>
-                    <div style="font-size:14px; opacity:0.9; margin-bottom:10px;">~ ${totalBase.toLocaleString()} ${config.baseCurr}</div>
-                    <button class="btn-action no-print" style="width:100%; background:rgba(255,255,255,0.2); color:white;" onclick="window.print()">${t('exportPDF')}</button>
-                </div>
-                ${tripSummaryHtml}
-            </div>
+    // ==========================================
+    // 4. 購物車邏輯 
+    // ==========================================
+    let currentPreviewPrice = 0; let currentTotal = 0; let cart = []; let orderSeq = 1;
+    function calcPreview() {
+        const size = parseFloat(document.getElementById('size').value); const material = parseFloat(document.getElementById('material').value); const qty = parseInt(document.getElementById('qty').value) || 1;
+        const newPrice = Math.round(size * material * qty);
+        animateValue(document.getElementById('preview-price'), currentPreviewPrice, newPrice, 400); currentPreviewPrice = newPrice;
+    }
+    function addToCart() {
+        const sizeBox = document.getElementById('size'); const matBox = document.getElementById('material');
+        const itemName = `${sizeBox.options[sizeBox.selectedIndex].dataset.name} (${matBox.options[matBox.selectedIndex].dataset.name})`; 
+        const qty = parseInt(document.getElementById('qty').value) || 1;
+        const totalPrice = Math.round(parseFloat(sizeBox.value) * parseFloat(matBox.value)) * qty; 
+        const existing = cart.findIndex(i => i.name === itemName);
+        if(existing > -1) { cart[existing].qty += qty; cart[existing].price += totalPrice; } else { cart.push({ name: itemName, qty, price: totalPrice }); }
+        renderCart();
+    }
+    function renderCart() {
+        const list = document.getElementById('cart-list'); list.innerHTML = ''; let sum = 0;
+        if(cart.length===0) list.innerHTML = `<p style="color:var(--text-sub); font-size:0.8rem; text-align:center;">${dict[currentLang].emptyCart}</p>`;
+        else cart.forEach((i, idx) => { sum += i.price; list.innerHTML += `<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:8px 0;border-bottom:1px dashed var(--card-border);"><span>${i.name} * ${i.qty}</span><span>$${i.price} <button onclick="cart.splice(${idx},1); renderCart()" style="color:#ff4757;background:none;border:none;cursor:pointer;">×</button></span></div>`; });
+        animateValue(document.getElementById('final-total'), currentTotal, sum, 500); currentTotal = sum;
+    }
+    function checkout() {
+        if(cart.length===0 || !document.getElementById('buyer-name').value || !document.getElementById('buyer-phone').value) { alert('Missing info or empty cart.'); return; }
+        const rStr = Math.random().toString(36).toUpperCase().substring(2, 8); 
+        const d = new Date(); const dStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        const oId = `${rStr}-${dStr}-${String(orderSeq++).padStart(4,'0')}`;
+        document.getElementById('r-id').innerText = "ID: " + oId; document.getElementById('r-barcode').innerText = `*${oId}*`; 
+        document.getElementById('receipt-card').classList.remove('hidden');
+    }
 
-            <div class="page-break">
-                <div class="overview-panel chart-print-panel">
-                    <h4 style="margin:0 0 15px 0;">${t('completionTitle')}</h4>
-                    <div class="chart-flex-container">
-                        <div class="chart-canvas-wrapper"><canvas id="completionChart"></canvas></div>
-                        <div class="chart-summary-list">
-                            <div class="chart-summary-item"><span>${t('completed')}</span><b>${completedItems}</b></div>
-                            <div class="chart-summary-item"><span>${t('incomplete')}</span><b>${totalItems - completedItems}</b></div>
-                            <div class="chart-summary-item"><span>Total</span><b>${totalItems}</b></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="overview-panel chart-print-panel">
-                    <h4 style="margin:0 0 15px 0;">${t('expenseTitle')} (${config.targetCurr})</h4>
-                    <div class="chart-flex-container">
-                        <div class="chart-canvas-wrapper"><canvas id="expenseChart"></canvas></div>
-                        <div class="chart-summary-list">
-                            ${expLabels.map((lbl, i) => `<div class="chart-summary-item"><span>${lbl}</span><b>${expData[i].toLocaleString()}</b></div>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="page-break">
-                <div class="overview-panel chart-print-panel">
-                    <h4 style="margin:0 0 15px 0;">${t('catTitle')}</h4>
-                    <div class="chart-flex-container">
-                        <div class="chart-canvas-wrapper"><canvas id="catChart"></canvas></div>
-                        <div class="chart-summary-list">
-                            ${catLabels.map((lbl, i) => `<div class="chart-summary-item"><span>${lbl}</span><b>${catData[i]}</b></div>`).join('')}
-                        </div>
-                    </div>
-                </div>
-                <div class="overview-panel chart-print-panel">
-                    <h4 style="margin:0 0 15px 0;">${t('stepTitle')}</h4>
-                    <div class="bar-container"><canvas id="stepsChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="page-break">
-                <div class="overview-panel" style="padding:0; border:none; background:transparent;">
-                    <h4 style="margin:0 0 15px 0; padding-left:4px;">${t('expenseTable')}</h4>
-                    <div style="background:var(--card); border-radius:18px; padding:16px; border:1px solid var(--border);">
-                        ${expenseTableHtml}
-                    </div>
-                </div>
-            </div>
-
-            <div class="page-break">
-                <div style="font-weight:700; margin:20px 0 10px;">${t('allSpots')}</div>
-                ${allSpotsHtml}
-            </div>
-        `;
-
+    // 啟動前台 3D 懸停特效
+    document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
-            if(typeof Chart === 'undefined') return;
-            
-            const chartOptions = {
-                responsive: true, maintainAspectRatio: false, animation: false,
-                layout: { padding: 20 },
-                plugins: {
-                    legend: { display: false },
-                    datalabels: {
-                        color: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
-                        anchor: 'end', align: 'end', offset: 2, font: { size: 10, weight: 'bold' },
-                        formatter: (value, ctx) => {
-                            let sum = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-                            let percentage = (value * 100 / sum);
-                            if (percentage < 3) return ''; 
-                            return percentage.toFixed(0) + "%";
-                        }
-                    }
-                }
-            };
-            const colors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#8E8E93', '#5AC8FA', '#FF2D55', '#E5E5EA', '#1C1C1E'];
-
-            if(completionChart) completionChart.destroy();
-            completionChart = new Chart(document.getElementById('completionChart').getContext('2d'), {
-                type: 'doughnut', data: { labels: [t('completed'), t('incomplete')], datasets: [{ data: [completedItems, totalItems - completedItems], backgroundColor: ['#34C759', '#E5E5EA'], borderWidth: 1 }] }, options: chartOptions
+            document.querySelectorAll('#shop-view .glass-card').forEach(card => {
+                card.addEventListener('mousemove', e => {
+                    if (window.innerWidth <= 900) return; 
+                    const rect = card.getBoundingClientRect();
+                    card.style.transform = `perspective(1000px) rotateX(${((e.clientY - rect.top - rect.height/2) / (rect.height/2)) * -8}deg) rotateY(${((e.clientX - rect.left - rect.width/2) / (rect.width/2)) * 8}deg) scale3d(1.02, 1.02, 1.02)`;
+                    card.style.transition = 'none'; card.style.borderColor = 'rgba(0, 229, 255, 0.4)'; card.style.boxShadow = '0 15px 40px var(--accent-glow)';
+                });
+                card.addEventListener('mouseleave', () => {
+                    if (window.innerWidth <= 900) return;
+                    card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+                    card.style.transition = 'transform 0.5s, border-color 0.5s, box-shadow 0.5s';
+                    card.style.borderColor = 'var(--card-border)'; card.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+                });
             });
+        }, 1500);
+    });
 
-            if(expenseChart) expenseChart.destroy();
-            expenseChart = new Chart(document.getElementById('expenseChart').getContext('2d'), {
-                type: 'doughnut', data: { labels: expLabels, datasets: [{ data: expData, backgroundColor: colors, borderWidth: 1 }] }, options: chartOptions
-            });
-
-            if(categoryChart) categoryChart.destroy();
-            categoryChart = new Chart(document.getElementById('catChart').getContext('2d'), {
-                type: 'doughnut', data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: colors, borderWidth: 1 }] }, options: chartOptions
-            });
-
-            if(stepsChart) stepsChart.destroy();
-            stepsChart = new Chart(document.getElementById('stepsChart').getContext('2d'), {
-                type: 'bar',
-                data: { labels: stepsLabels, datasets: [{ data: stepsData, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(), borderRadius: 4 }] },
-                options: {
-                    responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 20 } },
-                    plugins: { legend: { display: false }, datalabels: { color: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(), anchor: 'end', align: 'top', font: { size: 10, weight: 'bold' }, formatter: (v) => v > 0 ? v : '' } },
-                    scales: { y: { beginAtZero: true, suggestedMax: Math.max(...stepsData, 10000) * 1.2 } }
-                }
-            });
-        }, 100);
-    }
-
-    // --- 6. 設定管理 ---
-    function renderSettingsDays() {
-        tempItinerary = JSON.parse(JSON.stringify(itinerary));
-        renderSettingsDaysList();
-    }
-
-    function renderSettingsDaysList() {
-        let html = tempItinerary.map((d, idx) => `
-            <div class="day-mgt-row">
-                <b style="width:30px; font-size:14px;">D${idx+1}</b>
-                <input class="ios-input" value="${d.summary}" placeholder="Name" style="flex:2; min-height:36px; margin:0;" onchange="tempItinerary[${idx}].summary=this.value">
-                <input type="number" class="ios-input" value="${d.steps || 0}" placeholder="Steps" style="flex:1; min-height:36px; margin:0;" onchange="tempItinerary[${idx}].steps=parseInt(this.value)||0">
-                <button class="btn-action btn-del" style="width:40px; min-height:36px; margin:0; padding:0;" onclick="deleteDayInSettings(${idx})">X</button>
-            </div>
-        `).join('');
-        document.getElementById('settings-days-list').innerHTML = html;
-    }
-
-    function addDayInSettings() { tempItinerary.push({ day: tempItinerary.length + 1, summary: "New Day", steps: 0, items: [] }); renderSettingsDaysList(); }
-    function deleteDayInSettings(idx) { if(confirm(t('delete') + "?")) { tempItinerary.splice(idx, 1); tempItinerary.forEach((d, i) => d.day = i + 1); renderSettingsDaysList(); } }
-
-    function openSettings() {
-        document.getElementById('cfg-lang').value = config.lang; document.getElementById('cfg-base-theme').value = config.baseTheme; document.getElementById('cfg-accent').value = config.accent;
-        document.getElementById('cfg-title').value = config.title; document.getElementById('cfg-date').value = config.startDate;
-        document.getElementById('cfg-base').value = config.baseCurr; document.getElementById('cfg-target').value = config.targetCurr; document.getElementById('cfg-rate').value = config.rate; 
-        renderSettingsDays();
-        document.getElementById('settings-modal').style.display = 'flex';
-    }
-    function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
-    function saveSettings() {
-        config.title = document.getElementById('cfg-title').value || "Trip"; config.startDate = document.getElementById('cfg-date').value || "2026-03-25";
-        config.baseCurr = document.getElementById('cfg-base').value || "JPY"; config.targetCurr = document.getElementById('cfg-target').value || "TWD";
-        config.rate = parseFloat(document.getElementById('cfg-rate').value) || 0.21;
-        itinerary = JSON.parse(JSON.stringify(tempItinerary)); curIdx = 0; 
-        localStorage.setItem('v88_config', JSON.stringify(config));
-        applyTranslation(true); applyTheme(true); save(); closeSettings(); render();
-    }
-
-    function save() { localStorage.setItem('v88_data', JSON.stringify(itinerary)); localStorage.setItem('v88_extras', JSON.stringify(extras)); }
-    function switchTab(t) { currentTab = t; document.querySelectorAll('.tab-item').forEach(b=>b.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); editTarget = null; isEditMode = false; render(); }
-    function toggleExpand() { isExpanded = !isExpanded; document.getElementById('main-drawer').style.height = isExpanded ? '92%':'60%'; }
+    calcPreview(); renderCart();
 </script>
+
 </body>
 </html>
